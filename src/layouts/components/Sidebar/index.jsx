@@ -10,7 +10,7 @@ import {
   Plus,
   List
 } from 'lucide-react';
-
+import logo from '../../../assets/images/logo.png';
 const Sidebar = ({ isOpen, setIsOpen }) => {
   const menuItems = [
     { icon: Home, label: 'Dashboard', href: '/' },
@@ -35,8 +35,11 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       fixed inset-y-0 left-0 z-50 w-64 bg-gray-800 transform transition-transform duration-300 ease-in-out
       ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0
     `}>
-      <div className="flex items-center justify-between h-16 px-4 bg-gray-900">
-        <h1 className="text-xl font-bold text-white">Admin Panel</h1>
+      <div className="flex items-center justify-start h-16 px-4 bg-gray-900">
+        <h1 className="text-xl  flex items-center font-subtitle text-[30px] text-bg-primary">
+          <img src={logo} alt="" className='w-[60px]' />
+          L'atelia
+        </h1>
       </div>
 
       <nav className="mt-8">
