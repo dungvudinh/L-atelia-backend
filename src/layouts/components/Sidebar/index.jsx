@@ -8,7 +8,8 @@ import {
   ShoppingCart,
   FolderOpen,
   Plus,
-  List
+  List,
+  BookImage
 } from 'lucide-react';
 import logo from '../../../assets/images/logo.png';
 const Sidebar = ({ isOpen, setIsOpen }) => {
@@ -23,6 +24,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { icon: Plus, label: 'Thêm dự án', href: '/projects/create' },
       ]
     },
+    { icon:BookImage, label:'Media', href:'/media'}, 
     { icon: Users, label: 'Users', href: '/users' },
     { icon: ShoppingCart, label: 'Orders', href: '/orders' },
     { icon: Package, label: 'Products', href: '/products' },

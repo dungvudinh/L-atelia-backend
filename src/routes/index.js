@@ -3,6 +3,8 @@ import Dashboard from "../pages/Dashboard";
 import ProjectDetail from "../pages/ProjectDetail";
 import Projects from "../pages/Projects";
 import CreateProject from '../pages/Projects/create';
+import Media from '../pages/Media';
+import CreatMedia from '../pages/Media/create';
 const publicRoutes = [
   {
     path:routes.dashboard, 
@@ -19,6 +21,14 @@ const publicRoutes = [
   {
     path:routes.createProject, 
     component:CreateProject
+  }, 
+  {
+    path:routes.media, 
+    component:Media
+  }, 
+  {
+    path:routes.createMedia, 
+    component:CreatMedia
   }
 ];
 
