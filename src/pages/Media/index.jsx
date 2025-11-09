@@ -1,351 +1,499 @@
-// src/components/admin/MediaManager.jsx
-import { useNavigate } from 'react-router-dom';
+// src/pages/admin/media/Media.jsx
 import { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Image, 
-  Video,
-  FileText,
-  MoreVertical,
-  Download,
-  Eye
-} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Edit, Trash2, Eye, Calendar, FolderOpen, Image, Video, FileText, Building, User, Package } from 'lucide-react';
+import { mediaService } from '../../services/mediaService';
 
-const MediaManager = () => {
-    const navigate = useNavigate();
-  const [mediaItems, setMediaItems] = useState([]);
-  const [filteredItems, setFilteredItems] = useState([]);
-  const [selectedFilter, setSelectedFilter] = useState('All');
+const Media = () => {
+  const [media, setMedia] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingItem, setEditingItem] = useState(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [filterType, setFilterType] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [deleteLoading, setDeleteLoading] = useState(null);
 
-  // Mock data based on the image content
-  const initialMediaData = [
-    {
-      id: 1,
-      title: 'Exploring Mon Cor: Barrow Projects Presents a Remarkable Architectural Marvel in Soller, Mallorca',
-      description: 'Dubbed Mon Cor, the newly renovated home dates to 1903',
-      category: 'Properties',
-      type: 'image',
-      url: '/images/properties/mon-cor.jpg',
-      tags: ['architecture', 'renovation', 'mallorca'],
-      uploadDate: '2024-01-15',
-      fileSize: '2.4 MB',
-      dimensions: '1920x1080'
-    },
-    {
-      id: 2,
-      title: 'Six of the best inland towns in Mallorca',
-      description: 'Smart buyers are heading for the Spanish island\'s hills, to escape the crowds and find bargains. Buy in from €350,000',
-      category: 'Lifestyle',
-      type: 'image',
-      url: '/images/lifestyle/mallorca-towns.jpg',
-      tags: ['travel', 'real-estate', 'spain'],
-      uploadDate: '2024-01-10',
-      fileSize: '1.8 MB',
-      dimensions: '1920x1080'
-    },
-    {
-      id: 3,
-      title: '148th abcMallorca Property Special 2022',
-      description: 'Smart buyers are heading for the Spanish island\'s hills, to escape the crowds and find bargains. Buy in from €350,000',
-      category: 'Product',
-      type: 'document',
-      url: '/documents/property-special-2022.pdf',
-      tags: ['property', 'magazine', '2022'],
-      uploadDate: '2024-01-05',
-      fileSize: '4.2 MB',
-      dimensions: 'A4'
-    },
-    {
-      id: 4,
-      title: 'Modern Architecture - Carlyle Residence',
-      description: 'As well as a strong connection to the surrounds, the brief called for visual research, spatial flexibility and generous outdoor living.',
-      category: 'Properties',
-      type: 'image',
-      url: '/images/properties/carlyle-residence.jpg',
-      tags: ['modern', 'architecture', 'residence'],
-      uploadDate: '2024-01-03',
-      fileSize: '3.1 MB',
-      dimensions: '1920x1080'
+  const fetchMedia = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await mediaService.getMedia();
+      
+      if (response.success) {
+        setMedia(response.data.media || []);
+      } else {
+        throw new Error(response.message || 'Failed to fetch media');
+      }
+    } catch (err) {
+      console.error('Error fetching media:', err);
+      setError(err.message || 'Có lỗi xảy ra khi tải dữ liệu');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   useEffect(() => {
-    setMediaItems(initialMediaData);
-    setFilteredItems(initialMediaData);
+    fetchMedia();
   }, []);
 
-  useEffect(() => {
-    filterMedia();
-  }, [selectedFilter, searchTerm, mediaItems]);
-
-  const filterMedia = () => {
-    let filtered = mediaItems;
-
-    if (selectedFilter !== 'All') {
-      filtered = filtered.filter(item => item.category === selectedFilter);
+  const getImageUrl = (filePath) => {
+    if (!filePath) return null;
+    
+    if (filePath.startsWith('http') || filePath.startsWith('blob:') || filePath.startsWith('data:')) {
+      return filePath;
     }
-
-    if (searchTerm) {
-      filtered = filtered.filter(item => 
-        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
-
-    setFilteredItems(filtered);
+    
+    const baseUrl = 'http://localhost:3000';
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    return `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
   };
 
-  const categories = ['All', 'Lifestyle', 'Properties', 'Product'];
-
-  const handleEdit = (item) => {
-    setEditingItem({ ...item });
-  };
-
-  const handleSave = () => {
-    if (editingItem) {
-      setMediaItems(prev => 
-        prev.map(item => item.id === editingItem.id ? editingItem : item)
-      );
-      setEditingItem(null);
+  const getFileIcon = (mimeType, category) => {
+    if (mimeType.startsWith('image/')) {
+      return <Image size={20} className="text-blue-500" />;
+    } else if (mimeType.startsWith('video/')) {
+      return <Video size={20} className="text-purple-500" />;
+    } else {
+      return <FileText size={20} className="text-gray-500" />;
     }
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this media item?')) {
-      setMediaItems(prev => prev.filter(item => item.id !== id));
+  const getCategoryIcon = (category) => {
+    switch (category) {
+      case 'Properties':
+        return <Building size={16} className="text-green-600" />;
+      case 'Lifestyle':
+        return <User size={16} className="text-blue-600" />;
+      case 'Product':
+        return <Package size={16} className="text-orange-600" />;
+      default:
+        return <FolderOpen size={16} className="text-gray-600" />;
     }
   };
 
-  const handleUpload = (newItem) => {
-    const item = {
-      ...newItem,
-      id: Math.max(...mediaItems.map(i => i.id)) + 1,
-      uploadDate: new Date().toISOString().split('T')[0]
+  const getCategoryBadge = (category) => {
+    const categoryConfig = {
+      Properties: { color: 'bg-green-100 text-green-800', label: 'Properties' },
+      Lifestyle: { color: 'bg-blue-100 text-blue-800', label: 'Lifestyle' },
+      Product: { color: 'bg-orange-100 text-orange-800', label: 'Product' }
     };
-    setMediaItems(prev => [...prev, item]);
-    setShowUploadModal(false);
+    
+    const config = categoryConfig[category] || { color: 'bg-gray-100 text-gray-800', label: category };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {getCategoryIcon(category)}
+        <span className="ml-1">{config.label}</span>
+      </span>
+    );
   };
 
-  const getFileIcon = (type) => {
-    switch (type) {
-      case 'image': return <Image className="w-6 h-6" />;
-      case 'video': return <Video className="w-6 h-6" />;
-      case 'document': return <FileText className="w-6 h-6" />;
-      default: return <FileText className="w-6 h-6" />;
+  const getTypeBadge = (type) => {
+    const typeConfig = {
+      image: { color: 'bg-blue-100 text-blue-800', label: 'Image' },
+      video: { color: 'bg-purple-100 text-purple-800', label: 'Video' },
+      document: { color: 'bg-gray-100 text-gray-800', label: 'Document' }
+    };
+    
+    const config = typeConfig[type] || { color: 'bg-gray-100 text-gray-800', label: type };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      active: { color: 'bg-green-100 text-green-800', label: 'Active' },
+      inactive: { color: 'bg-gray-100 text-gray-800', label: 'Inactive' }
+    };
+    
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return 'N/A';
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const handleDelete = async (mediaId) => {
+    if (!window.confirm('Bạn có chắc muốn xóa media này?')) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(mediaId);
+      const response = await mediaService.deleteMedia(mediaId);
+      
+      if (response.success) {
+        setMedia(prev => prev.filter(m => m._id !== mediaId));
+        setSelectedItems(prev => prev.filter(id => id !== mediaId));
+        alert('Xóa media thành công');
+      } else {
+        throw new Error(response.message || 'Failed to delete media');
+      }
+    } catch (err) {
+      console.error('Error deleting media:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa media';
+      alert(`Lỗi: ${errorMessage}`);
+    } finally {
+      setDeleteLoading(null);
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.length === 0) {
+      alert('Vui lòng chọn ít nhất một media để xóa');
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} media đã chọn?`)) {
+      return;
+    }
+
+    try {
+      await mediaService.bulkDeleteMedia(selectedItems);
+      setMedia(prev => prev.filter(m => !selectedItems.includes(m._id)));
+      setSelectedItems([]);
+      alert(`Đã xóa ${selectedItems.length} media thành công`);
+    } catch (err) {
+      console.error('Error bulk deleting media:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa các media';
+      alert(`Lỗi: ${errorMessage}`);
+    }
+  };
+
+  const filteredMedia = media.filter(item => {
+    const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesType = filterType === 'all' || item.type === filterType;
+    const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
+    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+    return matchesSearch && matchesType && matchesCategory && matchesStatus;
+  });
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedItems(filteredMedia.map(media => media._id));
+    } else {
+      setSelectedItems([]);
+    }
+  };
+
+  const handleSelectItem = (id) => {
+    if (selectedItems.includes(id)) {
+      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+    } else {
+      setSelectedItems([...selectedItems, id]);
+    }
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">
+            <FolderOpen size={64} className="mx-auto" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Lỗi khi tải dữ liệu</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchMedia}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Media Library</h1>
-          <p className="text-gray-600">Manage your media files and documents</p>
+          <h1 className="text-2xl font-bold text-gray-900">Quản lý Media</h1>
+          <p className="text-gray-600">Tổng số: {filteredMedia.length} media</p>
         </div>
-        <button
-          onClick={() =>navigate('/media/create')}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          Upload Media
-        </button>
+        <div className="flex items-center space-x-3">
+          {selectedItems.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+            >
+              <Trash2 size={16} className="mr-2" />
+              Xóa ({selectedItems.length})
+            </button>
+          )}
+          <Link
+            to="/media/create"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+          >
+            <Plus size={20} className="mr-2" />
+            Upload Media
+          </Link>
+        </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search media..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Tìm kiếm theo tiêu đề, mô tả hoặc tags..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+            />
           </div>
-
-          {/* Category Filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={20} className="text-gray-400" />
-            <span className="text-gray-600 whitespace-nowrap">Filter by:</span>
-            <div className="flex gap-1">
-              {categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedFilter(category)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                    selectedFilter === category
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả loại</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="document">Document</option>
+          </select>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả danh mục</option>
+            <option value="Properties">Properties</option>
+            <option value="Lifestyle">Lifestyle</option>
+            <option value="Product">Product</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button
+            onClick={fetchMedia}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Làm mới
+          </button>
         </div>
       </div>
 
       {/* Media Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredItems.map(item => (
-          <div key={item.id} className="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow">
-            {/* Media Header */}
-            <div className="p-4 border-b">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  {getFileIcon(item.type)}
-                  <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                    {item.category}
-                  </span>
-                </div>
-                <div className="relative">
-                  <button className="p-1 hover:bg-gray-100 rounded">
-                    <MoreVertical size={16} />
-                  </button>
-                </div>
-              </div>
-              
-              {editingItem?.id === item.id ? (
-                <input
-                  type="text"
-                  value={editingItem.title}
-                  onChange={(e) => setEditingItem(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full font-semibold text-gray-800 border-b border-gray-300 focus:outline-none focus:border-blue-500"
-                />
-              ) : (
-                <h3 className="font-semibold text-gray-800 line-clamp-2">{item.title}</h3>
-              )}
-            </div>
-
-            {/* Media Content */}
-            <div className="p-4">
-              {item.type === 'image' && (
-                <div className="aspect-video bg-gray-100 rounded-lg mb-3 flex items-center justify-center">
-                  <Image className="w-12 h-12 text-gray-400" />
-                </div>
-              )}
-              
-              {editingItem?.id === item.id ? (
-                <textarea
-                  value={editingItem.description}
-                  onChange={(e) => setEditingItem(prev => ({ ...prev, description: e.target.value }))}
-                  rows="3"
-                  className="w-full text-sm text-gray-600 border rounded p-2 focus:outline-none focus:border-blue-500"
-                />
-              ) : (
-                <p className="text-sm text-gray-600 mb-3 line-clamp-3">{item.description}</p>
-              )}
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-1 mb-3">
-                {item.tags.map((tag, index) => (
-                  <span key={index} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-
-              {/* File Info */}
-              <div className="text-xs text-gray-500 space-y-1">
-                <div>Uploaded: {item.uploadDate}</div>
-                <div>Size: {item.fileSize}</div>
-                {item.dimensions && <div>Dimensions: {item.dimensions}</div>}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="px-4 py-3 bg-gray-50 border-t flex justify-between">
-              {editingItem?.id === item.id ? (
-                <>
-                  <button
-                    onClick={() => setEditingItem(null)}
-                    className="text-gray-600 hover:text-gray-800 text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                  >
-                    Save
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="p-1 text-gray-400 hover:text-green-600 transition-colors" title="View">
-                      <Eye size={16} />
-                    </button>
-                    <button className="p-1 text-gray-400 hover:text-purple-600 transition-colors" title="Download">
-                      <Download size={16} />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredItems.length === 0 && (
-        <div className="text-center py-12">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Image className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No media found</h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm || selectedFilter !== 'All' 
-              ? 'Try changing your search or filter criteria'
-              : 'Get started by uploading your first media file'
-            }
-          </p>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} className="inline mr-2" />
-            Upload Media
-          </button>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="relative w-12 px-6 sm:w-16 sm:px-8">
+                  <input
+                    type="checkbox"
+                    className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    onChange={handleSelectAll}
+                    checked={selectedItems.length === filteredMedia.length && filteredMedia.length > 0}
+                  />
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Media
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Danh mục
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Loại
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Kích thước
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ngày upload
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Trạng thái
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Thao tác</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredMedia.map((item) => (
+                <tr 
+                  key={item._id} 
+                  className={selectedItems.includes(item._id) ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                >
+                  <td className="relative w-12 px-6 sm:w-16 sm:px-8">
+                    <input
+                      type="checkbox"
+                      className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={selectedItems.includes(item._id)}
+                      onChange={() => handleSelectItem(item._id)}
+                    />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                        {item.mimeType?.startsWith('image/') ? (
+                          <img 
+                            src={getImageUrl(item.filePath)} 
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                            crossOrigin="anonymous"
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/48x48?text=Error';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            {getFileIcon(item.mimeType, item.category)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        <div className="flex items-center space-x-2">
+                          <h4 className="text-sm font-semibold text-gray-900">
+                            {item.title || 'Untitled'}
+                          </h4>
+                        </div>
+                        <p className="text-sm text-gray-500 line-clamp-1 mt-1">
+                          {item.description || 'No description'}
+                        </p>
+                        <div className="flex items-center mt-1 text-xs text-gray-400">
+                          <span>{item.fileName}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getCategoryBadge(item.category)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getTypeBadge(item.type)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatFileSize(item.fileSize)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div className="flex items-center">
+                      <Calendar size={14} className="mr-1" />
+                      {formatDate(item.createdAt)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getStatusBadge(item.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      <Link
+                        to={`/media/${item._id}`}
+                        className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
+                        title="Xem chi tiết"
+                      >
+                        <Eye size={16} />
+                      </Link>
+                      <Link
+                        to={`/media/edit/${item._id}`}
+                        className="text-green-600 hover:text-green-900 transition-colors p-1 rounded hover:bg-green-50"
+                        title="Chỉnh sửa"
+                      >
+                        <Edit size={16} />
+                      </Link>
+                      <button 
+                        onClick={() => handleDelete(item._id)}
+                        disabled={deleteLoading === item._id}
+                        className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50 disabled:opacity-50"
+                        title="Xóa media"
+                      >
+                        {deleteLoading === item._id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
 
+        {filteredMedia.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <FolderOpen size={64} className="mx-auto" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {searchTerm || filterType !== 'all' || filterCategory !== 'all' || filterStatus !== 'all'
+                ? 'Không tìm thấy media phù hợp' 
+                : 'Chưa có media nào'
+              }
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {searchTerm || filterType !== 'all' || filterCategory !== 'all' || filterStatus !== 'all'
+                ? 'Hãy thử điều chỉnh tìm kiếm hoặc bộ lọc của bạn' 
+                : 'Hãy upload media đầu tiên của bạn'
+              }
+            </p>
+            {!searchTerm && filterType === 'all' && filterCategory === 'all' && filterStatus === 'all' && (
+              <Link
+                to="/media/upload"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center"
+              >
+                <Plus size={20} className="mr-2" />
+                Upload Media
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-// Upload Modal Component
-// 
-
-export default MediaManager;
+export default Media;

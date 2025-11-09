@@ -1,32 +1,95 @@
-import axiosClient from '../configs/axios';
+// services/projectService.js
+import axiosClient from "../configs/axios";
 export const projectService = {
-    // CREATE
-  createProject: async (data) => {
-    const response = await axiosInstance.post('/v1/projects', data);
-    return response.data;
+  getProjects: async (params = {}) => {
+    try {
+      console.log('📋 Fetching projects with params:', params);
+      
+      const response = await axiosClient.get('/v1/projects', { params });
+      console.log('✅ Projects fetched successfully');
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in getProjects service:', error);
+      throw error;
+    }
   },
+  // Create project với FormData
+  createProject: async (formData) => {
+    try {
+      console.log('FormData received in service:', formData);
+      
+      // DEBUG: Log tất cả entries trong FormData
+      for (let [key, value] of formData.entries()) {
+        console.log(`Service formData entry: ${key} =`, value);
+        
+        // Nếu là string data, parse để xem nội dung
+        if (key === 'data' && typeof value === 'string') {
+          try {
+            const parsedData = JSON.parse(value);
+            console.log('Parsed data field:', parsedData);
+          } catch (e) {
+            console.log('Data field (not JSON):', value);
+          }
+        }
+      }
 
-  // READ ALL
-  getAllProjects: async () => {
-    const response = await axiosInstance.get('/v1/projects');
-    return response.data;
+      const response = await axiosClient.post(`/v1/projects`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error in createProject service:', error);
+      throw error;
+    }
   },
-
-  // READ ONE
   getProjectById: async (id) => {
-    const response = await axiosInstance.get(`/v1//projects/${id}`);
-    return response.data;
+    try {
+      console.log(`📋 Fetching project with ID: ${id}`);
+      
+      const response = await axiosClient.get(`/v1/projects/${id}`);
+      console.log('✅ Project fetched successfully');
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in getProjectById service:', error);
+      throw error;
+    }
   },
+  // Update project với FormData
+  updateProject: async (id, formData) => {
+    try {
+      console.log('FormData for update:', formData);
+      
+      // DEBUG: Log entries
+      for (let [key, value] of formData.entries()) {
+        console.log(`Update formData entry: ${key} =`, value);
+      }
 
-  // UPDATE
-  updateProject: async (id, data) => {
-    const response = await axiosInstance.put(`/v1/projects/${id}`, data);
-    return response.data;
-  },
-
-  // DELETE
+      const response = await axiosClient.put(`/v1/projects/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error in updateProject service:', error);
+      throw error;
+    }
+  }, 
   deleteProject: async (id) => {
-    const response = await axiosInstance.delete(`/v1/projects/${id}`);
-    return response.data;
+    try {
+      console.log(`🗑️ Deleting project with ID: ${id}`);
+      
+      const response = await axiosClient.delete(`/v1/projects/${id}`);
+      console.log('✅ Project deleted successfully');
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in deleteProject service:', error);
+      throw error;
+    }
   },
-}
+};

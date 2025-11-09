@@ -9,7 +9,9 @@ import {
   FolderOpen,
   Plus,
   List,
-  BookImage
+  BookImage, 
+  Warehouse,
+  Calendar
 } from 'lucide-react';
 import logo from '../../../assets/images/logo.png';
 const Sidebar = ({ isOpen, setIsOpen }) => {
@@ -25,7 +27,9 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       ]
     },
     { icon:BookImage, label:'Media', href:'/media'}, 
+    {icon:Warehouse, label:'Dự án cho thuê',href:'/rent'}, 
     { icon: Users, label: 'Users', href: '/users' },
+    {icon:Calendar, label:'Bookings', href:'/bookings'}, 
     { icon: ShoppingCart, label: 'Orders', href: '/orders' },
     { icon: Package, label: 'Products', href: '/products' },
     { icon: BarChart3, label: 'Analytics', href: '/analytics' },
