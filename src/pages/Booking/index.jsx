@@ -1,152 +1,114 @@
 // components/BookingList.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import bookingService from '../../services/bookingService';
+import rentService from '../../services/rentService';
 
 const BookingList = () => {
   const [bookings, setBookings] = useState([]);
+  const [properties, setProperties] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterProperty, setFilterProperty] = useState('all');
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [error, setError] = useState('');
 
+  // Fetch bookings and properties
   useEffect(() => {
-    const mockBookings = [
-      {
-        id: 1,
-        bookingNumber: 'BK-001',
-        customer: {
-          name: 'John Smith',
-          email: 'john.smith@email.com',
-          phone: '+1234567890',
-          address: '123 Main St, New York, USA'
-        },
-        property: {
-          id: 1,
-          title: 'Villa Shirla',
-          location: 'South, Sinh, San Rafael',
-          price: 500
-        },
-        checkIn: '2024-02-15',
-        checkOut: '2024-02-20',
-        guests: 2,
-        totalAmount: 2500,
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        specialRequests: 'Early check-in would be appreciated',
-        createdAt: '2024-01-10T10:30:00',
-        updatedAt: '2024-01-10T10:30:00'
-      },
-      {
-        id: 2,
-        bookingNumber: 'BK-002',
-        customer: {
-          name: 'Maria Garcia',
-          email: 'maria.garcia@email.com',
-          phone: '+1234567891',
-          address: '456 Oak Ave, Los Angeles, USA'
-        },
-        property: {
-          id: 2,
-          title: 'Villa Palma',
-          location: 'North, Palma, Mallorca',
-          price: 450
-        },
-        checkIn: '2024-03-01',
-        checkOut: '2024-03-07',
-        guests: 4,
-        totalAmount: 2700,
-        status: 'pending',
-        paymentStatus: 'pending',
-        specialRequests: 'Need baby crib',
-        createdAt: '2024-01-11T14:20:00',
-        updatedAt: '2024-01-11T14:20:00'
-      },
-      {
-        id: 3,
-        bookingNumber: 'BK-003',
-        customer: {
-          name: 'David Johnson',
-          email: 'david.johnson@email.com',
-          phone: '+1234567892',
-          address: '789 Pine Rd, Chicago, USA'
-        },
-        property: {
-          id: 3,
-          title: 'Can Bancos',
-          location: 'Jackie, Julia Town',
-          price: 150
-        },
-        checkIn: '2024-02-20',
-        checkOut: '2024-02-22',
-        guests: 2,
-        totalAmount: 300,
-        status: 'cancelled',
-        paymentStatus: 'refunded',
-        specialRequests: '',
-        createdAt: '2024-01-09T09:15:00',
-        updatedAt: '2024-01-12T16:45:00'
-      },
-      {
-        id: 4,
-        bookingNumber: 'BK-004',
-        customer: {
-          name: 'Sarah Wilson',
-          email: 'sarah.wilson@email.com',
-          phone: '+1234567893',
-          address: '321 Elm St, Miami, USA'
-        },
-        property: {
-          id: 1,
-          title: 'Villa Shirla',
-          location: 'South, Sinh, San Rafael',
-          price: 500
-        },
-        checkIn: '2024-04-10',
-        checkOut: '2024-04-15',
-        guests: 3,
-        totalAmount: 2500,
-        status: 'confirmed',
-        paymentStatus: 'partial',
-        specialRequests: 'Vegetarian meals required',
-        createdAt: '2024-01-12T11:00:00',
-        updatedAt: '2024-01-12T11:00:00'
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        
+        // Fetch bookings and properties in parallel
+        const [bookingsData, propertiesData] = await Promise.all([
+          bookingService.getAllBookings(),
+          rentService.getAllRentals()
+        ]);
+        
+        setBookings(bookingsData.data);
+        setProperties(propertiesData.data);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setError('Failed to load bookings. Please try again.');
+        // Fallback to empty arrays
+        setBookings([]);
+        setProperties([]);
+      } finally {
+        setLoading(false);
       }
-    ];
-    
-    setTimeout(() => {
-      setBookings(mockBookings);
-      setLoading(false);
-    }, 1000);
+    };
+
+    fetchData();
   }, []);
 
   const statusOptions = ['all', 'pending', 'confirmed', 'cancelled', 'completed'];
-  const propertyOptions = ['all', 'Villa Shirla', 'Villa Palma', 'Can Bancos', 'Villa Marina'];
+  const propertyOptions = ['all', ...properties.map(property => property.title)];
 
   const filteredBookings = bookings.filter(booking => {
     const matchesSearch = 
-      booking.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.bookingNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      booking.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.customer?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.bookingNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || booking.status === filterStatus;
-    const matchesProperty = filterProperty === 'all' || booking.property.title === filterProperty;
+    const matchesProperty = filterProperty === 'all' || booking.property?.title === filterProperty;
     
     return matchesSearch && matchesStatus && matchesProperty;
   });
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this booking?')) {
-      setBookings(bookings.filter(item => item.id !== id));
-      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+      try {
+        await bookingService.deleteBooking(id);
+        setBookings(bookings.filter(item => item.id !== id));
+        setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+      } catch (error) {
+        console.error('Error deleting booking:', error);
+        alert(error.message || 'Failed to delete booking');
+      }
     }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedItems.length === 0) return;
     
     if (window.confirm(`Are you sure you want to delete ${selectedItems.length} selected bookings?`)) {
-      setBookings(bookings.filter(item => !selectedItems.includes(item.id)));
-      setSelectedItems([]);
+      try {
+        // Delete all selected bookings
+        await Promise.all(selectedItems.map(id => bookingService.deleteBooking(id)));
+        setBookings(bookings.filter(item => !selectedItems.includes(item.id)));
+        setSelectedItems([]);
+      } catch (error) {
+        console.error('Error deleting bookings:', error);
+        alert('Failed to delete some bookings. Please try again.');
+      }
+    }
+  };
+
+  const handleStatusUpdate = async (id, newStatus) => {
+    try {
+      await bookingService.updateBookingStatus(id, newStatus);
+      // Update local state
+      setBookings(bookings.map(booking => 
+        booking.id === id ? { ...booking, status: newStatus } : booking
+      ));
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert(error.message || 'Failed to update status');
+    }
+  };
+
+  const handlePaymentStatusUpdate = async (id, newPaymentStatus) => {
+    try {
+      await bookingService.updatePaymentStatus(id, newPaymentStatus);
+      // Update local state
+      setBookings(bookings.map(booking => 
+        booking.id === id ? { ...booking, paymentStatus: newPaymentStatus } : booking
+      ));
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      alert(error.message || 'Failed to update payment status');
     }
   };
 
@@ -201,6 +163,7 @@ const BookingList = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: '2-digit',
@@ -209,6 +172,7 @@ const BookingList = () => {
   };
 
   const formatCurrency = (amount) => {
+    if (!amount) return '$0';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
@@ -216,16 +180,73 @@ const BookingList = () => {
   };
 
   const calculateNights = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return 0;
     const start = new Date(checkIn);
     const end = new Date(checkOut);
     const diffTime = Math.abs(end - start);
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  const handleExportReport = async () => {
+    try {
+      // In a real application, you would call an export API endpoint
+      // For now, we'll create a simple CSV export
+      const headers = ['Booking Number', 'Customer Name', 'Customer Email', 'Property', 'Check-in', 'Check-out', 'Nights', 'Guests', 'Total Amount', 'Status', 'Payment Status'];
+      const csvData = filteredBookings.map(booking => [
+        booking.bookingNumber,
+        booking.customer?.name || '',
+        booking.customer?.email || '',
+        booking.property?.title || '',
+        formatDate(booking.checkIn),
+        formatDate(booking.checkOut),
+        calculateNights(booking.checkIn, booking.checkOut),
+        booking.guests,
+        booking.totalAmount,
+        booking.status,
+        booking.paymentStatus
+      ]);
+
+      const csvContent = [headers, ...csvData]
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bookings-export-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      alert('Failed to export report');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <svg className="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Bookings</h3>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -239,7 +260,19 @@ const BookingList = () => {
           <p className="text-gray-600 mt-2">Manage customer bookings and reservations</p>
         </div>
         <div className="flex space-x-3">
-          <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center">
+          {/* <Link
+            to="/bookings/create"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Booking
+          </Link> */}
+          <button 
+            onClick={handleExportReport}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center"
+          >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -391,16 +424,16 @@ const BookingList = () => {
                             {booking.bookingNumber}
                           </h4>
                         </div>
-                        <p className="text-sm font-medium text-gray-900">{booking.customer.name}</p>
-                        <p className="text-sm text-gray-500">{booking.customer.email}</p>
+                        <p className="text-sm font-medium text-gray-900">{booking.customer?.name || 'N/A'}</p>
+                        <p className="text-sm text-gray-500">{booking.customer?.email || 'N/A'}</p>
                         <p className="text-xs text-gray-400 mt-1">{formatDate(booking.createdAt)}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900 space-y-1">
-                      <p className="font-medium">{booking.property.title}</p>
-                      <p className="text-gray-600 text-xs">{booking.property.location}</p>
+                      <p className="font-medium">{booking.property?.title || 'N/A'}</p>
+                      <p className="text-gray-600 text-xs">{booking.property?.location || 'N/A'}</p>
                       <div className="flex items-center space-x-2 text-xs text-gray-500 mt-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -417,7 +450,7 @@ const BookingList = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-gray-600">Guests:</span>
-                        <span className="font-medium">{booking.guests}</span>
+                        <span className="font-medium">{booking.guests || 0}</span>
                       </div>
                       {booking.specialRequests && (
                         <div className="mt-2">
@@ -479,6 +512,15 @@ const BookingList = () => {
                 : 'No bookings have been made yet'
               }
             </p>
+            {/* <Link
+              to="/bookings/create"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors inline-flex items-center"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Your First Booking
+            </Link> */}
           </div>
         )}
       </div>

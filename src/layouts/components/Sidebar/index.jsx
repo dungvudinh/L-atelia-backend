@@ -30,10 +30,10 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
     {icon:Warehouse, label:'Dự án cho thuê',href:'/rent'}, 
     { icon: Users, label: 'Users', href: '/users' },
     {icon:Calendar, label:'Bookings', href:'/bookings'}, 
-    { icon: ShoppingCart, label: 'Orders', href: '/orders' },
-    { icon: Package, label: 'Products', href: '/products' },
-    { icon: BarChart3, label: 'Analytics', href: '/analytics' },
-    { icon: Settings, label: 'Settings', href: '/settings' },
+    // { icon: ShoppingCart, label: 'Orders', href: '/orders' },
+    // { icon: Package, label: 'Products', href: '/products' },
+    // { icon: BarChart3, label: 'Analytics', href: '/analytics' },
+    // { icon: Settings, label: 'Settings', href: '/settings' },
   ];
 
   return (

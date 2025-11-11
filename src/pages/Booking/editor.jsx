@@ -1,6 +1,8 @@
 // components/BookingEditor.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import bookingService from '../../services/bookingService';
+import rentService from '../../services/rentService';
 
 const BookingEditor = () => {
   const { id } = useParams();
@@ -24,7 +26,6 @@ const BookingEditor = () => {
     checkIn: '',
     checkOut: '',
     guests: 1,
-    totalAmount: 0,
     status: 'pending',
     paymentStatus: 'pending',
     specialRequests: '',
@@ -34,40 +35,90 @@ const BookingEditor = () => {
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [properties, setProperties] = useState([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
 
-  const properties = [
-    { id: 1, title: 'Villa Shirla', location: 'South, Sinh, San Rafael', price: 500 },
-    { id: 2, title: 'Villa Palma', location: 'North, Palma, Mallorca', price: 450 },
-    { id: 3, title: 'Can Bancos', location: 'Jackie, Julia Town', price: 150 },
-    { id: 4, title: 'Villa Marina', location: 'South, Sinh, San Rafael', price: 600 }
-  ];
+  // Fetch properties from database (rents)
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        const propertiesData = await rentService.getAllRentals();
+        console.log(propertiesData)
+        setProperties(propertiesData.data);
+      } catch (error) {
+        console.error('Error fetching properties:', error);
+        // Fallback to empty array if API fails
+        setProperties([]);
+      }
+    };
+
+    fetchProperties();
+  }, []);
+
+  // Check property availability
+  const checkPropertyAvailability = async (propertyId, checkIn, checkOut, excludeBookingId = null) => {
+    if (!propertyId || !checkIn || !checkOut) return true;
+    
+    setAvailabilityLoading(true);
+    setAvailabilityError('');
+    
+    try {
+      const result = await bookingService.checkAvailability(
+        propertyId, 
+        checkIn, 
+        checkOut, 
+        excludeBookingId
+      );
+      return result.available;
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      setAvailabilityError(error.message || 'Error checking availability');
+      return false;
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (isEditing) {
-      const mockData = {
-        bookingNumber: 'BK-001',
-        customer: {
-          name: 'John Smith',
-          email: 'john.smith@email.com',
-          phone: '+1234567890',
-          address: '123 Main St, New York, USA'
-        },
-        property: {
-          id: 1,
-          title: 'Villa Shirla',
-          location: 'South, Sinh, San Rafael',
-          price: 500
-        },
-        checkIn: '2024-02-15',
-        checkOut: '2024-02-20',
-        guests: 2,
-        totalAmount: 2500,
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        specialRequests: 'Early check-in would be appreciated',
-        notes: 'Customer requested early check-in at 1 PM'
+      const fetchBookingData = async () => {
+        setLoading(true);
+        try {
+          const bookingData = await bookingService.getBookingById(id);
+          setFormData(bookingData);
+        } catch (error) {
+          console.error('Error fetching booking data:', error);
+          // Fallback to mock data for demonstration if API fails
+          const mockData = {
+            bookingNumber: 'BK-001',
+            customer: {
+              name: 'John Smith',
+              email: 'john.smith@email.com',
+              phone: '+1234567890',
+              address: '123 Main St, New York, USA'
+            },
+            property: {
+              id: 1,
+              title: 'Villa Shirla',
+              location: 'South, Sinh, San Rafael',
+              price: 500
+            },
+            checkIn: '2024-02-15',
+            checkOut: '2024-02-20',
+            guests: 2,
+            status: 'confirmed',
+            paymentStatus: 'paid',
+            specialRequests: 'Early check-in would be appreciated',
+            notes: 'Customer requested early check-in at 1 PM'
+          };
+          setFormData(mockData);
+        } finally {
+          setLoading(false);
+        }
       };
-      setFormData(mockData);
+
+      fetchBookingData();
     } else {
       // Generate booking number for new booking
       const newBookingNumber = `BK-${Date.now().toString().slice(-6)}`;
@@ -83,100 +134,172 @@ const BookingEditor = () => {
     }));
   };
 
-  const handleCustomerChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      customer: {
-        ...prev.customer,
-        [name]: value
-      }
-    }));
-  };
-
-  const handlePropertyChange = (e) => {
+  const handlePropertyChange = async (e) => {
     const propertyId = parseInt(e.target.value);
     const selectedProperty = properties.find(p => p.id === propertyId);
     
     if (selectedProperty) {
       setFormData(prev => ({
         ...prev,
-        property: selectedProperty
+        property: {
+          id: selectedProperty.id,
+          title: selectedProperty.title,
+          location: selectedProperty.location,
+          price: selectedProperty.price
+        }
       }));
-      calculateTotalAmount(selectedProperty.price, prev.checkIn, prev.checkOut);
-    }
-  };
 
-  const calculateTotalAmount = (pricePerNight, checkIn, checkOut) => {
-    if (!checkIn || !checkOut) return;
-    
-    const start = new Date(checkIn);
-    const end = new Date(checkOut);
-    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    
-    if (nights > 0) {
-      const total = nights * pricePerNight;
+      // Check availability if dates are already selected
+      if (prev.checkIn && prev.checkOut) {
+        const isAvailable = await checkPropertyAvailability(
+          selectedProperty.id, 
+          prev.checkIn, 
+          prev.checkOut
+        );
+        if (!isAvailable) {
+          setAvailabilityError('Property is not available for the selected dates');
+        } else {
+          setAvailabilityError('');
+        }
+      }
+    } else {
+      // Reset property if no selection
       setFormData(prev => ({
         ...prev,
-        totalAmount: total
+        property: {
+          id: '',
+          title: '',
+          location: '',
+          price: ''
+        }
       }));
     }
   };
 
-  const handleDateChange = (field, value) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value };
+  const handleDateChange = async (field, value) => {
+    const updatedFormData = { 
+      ...formData, 
+      [field]: value 
+    };
+    
+    setFormData(updatedFormData);
+
+    // Check availability if both dates and property are selected
+    if (updatedFormData.property.id && 
+        ((field === 'checkIn' && updatedFormData.checkOut) || 
+         (field === 'checkOut' && updatedFormData.checkIn))) {
       
-      // Recalculate total amount when dates change
-      if (field === 'checkIn' || field === 'checkOut') {
-        calculateTotalAmount(prev.property.price, 
-          field === 'checkIn' ? value : prev.checkIn,
-          field === 'checkOut' ? value : prev.checkOut
+      const checkIn = field === 'checkIn' ? value : formData.checkIn;
+      const checkOut = field === 'checkOut' ? value : formData.checkOut;
+      
+      if (checkIn && checkOut) {
+        const isAvailable = await checkPropertyAvailability(
+          updatedFormData.property.id, 
+          checkIn, 
+          checkOut
         );
+        if (!isAvailable) {
+          setAvailabilityError('Property is not available for the selected dates');
+        } else {
+          setAvailabilityError('');
+        }
       }
-      
-      return updated;
-    });
+    }
+  };
+
+  const handleGuestsChange = (e) => {
+    const { value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      guests: parseInt(value) || 1
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.property.id || !formData.checkIn || !formData.checkOut || !formData.guests) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate availability before submitting
+    const isAvailable = await checkPropertyAvailability(
+      formData.property.id,
+      formData.checkIn,
+      formData.checkOut,
+      id
+    );
+    
+    if (!isAvailable) {
+      alert('Cannot proceed. Property is not available for the selected dates.');
+      return;
+    }
+
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Booking data:', formData);
-      setLoading(false);
+    try {
+      if (isEditing) {
+        await bookingService.updateBooking(id, formData);
+      } else {
+        await bookingService.createBooking(formData);
+      }
+      
       navigate('/bookings');
-    }, 2000);
+    } catch (error) {
+      console.error('Error saving booking:', error);
+      alert(error.message || 'Failed to save booking');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendEmail = async () => {
+    if (!id) {
+      alert('Please save the booking first before sending email');
+      return;
+    }
+
     setSendingEmail(true);
     
-    // Simulate email sending
-    setTimeout(() => {
-      setSendingEmail(false);
+    try {
+      await bookingService.sendBookingEmail(id, 'update');
       setEmailSent(true);
-      
-      // Reset email sent status after 3 seconds
       setTimeout(() => setEmailSent(false), 3000);
-    }, 2000);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert(error.message || 'Failed to send email');
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   const calculateNights = () => {
     if (!formData.checkIn || !formData.checkOut) return 0;
     const start = new Date(formData.checkIn);
     const end = new Date(formData.checkOut);
-    return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    return nights > 0 ? nights : 0;
   };
 
   const formatCurrency = (amount) => {
+    if (!amount) return '$0';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
   };
+
+  if (loading && isEditing) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -227,15 +350,19 @@ const BookingEditor = () => {
                 value={formData.property.id}
                 onChange={handlePropertyChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={properties.length === 0}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
               >
                 <option value="">Select a property</option>
                 {properties.map(property => (
                   <option key={property.id} value={property.id}>
-                    {property.title} - {property.location} (${property.price}/night)
+                    {property.title} - {property.location} ({formatCurrency(property.price)}/night)
                   </option>
                 ))}
               </select>
+              {properties.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">No properties available. Please check the properties list.</p>
+              )}
             </div>
 
             <div>
@@ -272,80 +399,70 @@ const BookingEditor = () => {
               </label>
               <input
                 type="number"
-                name="guests"
                 value={formData.guests}
-                onChange={handleInputChange}
+                onChange={handleGuestsChange}
                 required
                 min="1"
-                max="10"
+                max="20"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Total Amount
-              </label>
-              <input
-                type="text"
-                value={formatCurrency(formData.totalAmount)}
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 font-semibold"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {calculateNights()} nights × {formatCurrency(formData.property.price || 0)}/night
-              </p>
+            {/* Availability Status */}
+            <div className="md:col-span-2">
+              {availabilityLoading && (
+                <div className="text-blue-600 text-sm flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                  Checking availability...
+                </div>
+              )}
+              {availabilityError && (
+                <div className="text-red-600 text-sm font-medium">
+                  {availabilityError}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Customer Information */}
+        {/* Customer Information - READ ONLY */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Customer Information</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name *
+                Full Name
               </label>
               <input
                 type="text"
-                name="name"
                 value={formData.customer.name}
-                onChange={handleCustomerChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="John Smith"
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
+                Email
               </label>
               <input
                 type="email"
-                name="email"
                 value={formData.customer.email}
-                onChange={handleCustomerChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="john.smith@email.com"
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone *
+                Phone
               </label>
               <input
                 type="tel"
-                name="phone"
                 value={formData.customer.phone}
-                onChange={handleCustomerChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="+1234567890"
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
               />
             </div>
 
@@ -354,12 +471,10 @@ const BookingEditor = () => {
                 Address
               </label>
               <textarea
-                name="address"
                 value={formData.customer.address}
-                onChange={handleCustomerChange}
+                readOnly
                 rows="2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="123 Main St, New York, USA"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
               />
             </div>
           </div>
@@ -445,11 +560,11 @@ const BookingEditor = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Property:</span>
-                  <span className="font-medium">{formData.property.title}</span>
+                  <span className="font-medium">{formData.property.title || 'Not selected'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Location:</span>
-                  <span className="font-medium">{formData.property.location}</span>
+                  <span className="font-medium">{formData.property.location || 'Not available'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Check-in:</span>
@@ -467,10 +582,16 @@ const BookingEditor = () => {
                   <span className="text-gray-600">Guests:</span>
                   <span className="font-medium">{formData.guests}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Price per night:</span>
+                  <span className="font-medium">{formatCurrency(formData.property.price)}</span>
+                </div>
                 <div className="border-t pt-2 mt-2">
                   <div className="flex justify-between text-base font-semibold">
                     <span>Total Amount:</span>
-                    <span className="text-blue-600">{formatCurrency(formData.totalAmount)}</span>
+                    <span className="text-blue-600">
+                      {formatCurrency(calculateNights() * (formData.property.price || 0))}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -508,7 +629,7 @@ const BookingEditor = () => {
               <button
                 type="button"
                 onClick={handleSendEmail}
-                disabled={sendingEmail || !formData.customer.email}
+                disabled={sendingEmail || !formData.customer.email || !id}
                 className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-6 py-2 rounded-lg transition-colors font-medium flex items-center"
               >
                 {sendingEmail ? (
@@ -546,7 +667,7 @@ const BookingEditor = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || availabilityLoading}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg transition-colors font-medium"
               >
                 {loading ? 'Saving...' : (isEditing ? 'Update Booking' : 'Create Booking')}

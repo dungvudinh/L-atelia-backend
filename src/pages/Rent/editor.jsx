@@ -1,11 +1,13 @@
 // components/RentEditor.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import rentService from '../../services/rentService';
 
 const RentEditor = () => {
-  const { id } = useParams();
+  const { rentId } = useParams();
   const navigate = useNavigate();
-  const isEditing = Boolean(id);
+  const isEditing = Boolean(rentId);
+  const fileInputRef = useRef(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -15,8 +17,8 @@ const RentEditor = () => {
     beds: '',
     bedrooms: '',
     bathrooms: '',
-    description: '', // Nội dung đầy đủ (Show More)
-    descriptionShort: '', // Nội dung tóm tắt
+    description: '',
+    descriptionShort: '',
     highlights: [
       {
         id: 1,
@@ -53,11 +55,11 @@ const RentEditor = () => {
   });
 
   const [loading, setLoading] = useState(false);
-  const [showMediaManager, setShowMediaManager] = useState(false);
   const [newHighlight, setNewHighlight] = useState({ title: '', description: '' });
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [localImages, setLocalImages] = useState([]); // Lưu ảnh local khi create
 
   const amenitiesOptions = [
     'Safety room',
@@ -98,67 +100,248 @@ const RentEditor = () => {
     )
   };
 
+  // Fetch rental data when editing
   useEffect(() => {
-    if (isEditing) {
-      const mockData = {
-        title: 'Villa Shirla',
-        location: 'South, Sinh, San Rafael',
-        price: '500',
-        priceUnit: 'per night',
-        beds: '2',
-        bedrooms: '1',
-        bathrooms: '1',
-        description: 'Luxury villa with panoramic views of the sea and mountains. Perfect for romantic getaways and family vacations.\n\nThis stunning property features:\n• Private infinity pool\n• Spacious living areas\n• Modern kitchen with high-end appliances\n• Luxurious bedrooms with en-suite bathrooms\n• Beautiful garden and outdoor dining area\n\nLocated in a peaceful neighborhood with easy access to beaches, restaurants, and shopping centers.',
-        descriptionShort: 'Luxury villa with panoramic sea and mountain views. Perfect for romantic getaways and family vacations. Private infinity pool and modern amenities.',
-        highlights: [
-          {
-            id: 1,
-            title: 'Outdoor entertainment',
-            description: 'The alfresco dining and outdoor seating are great for summer trips.',
-            icon: 'calendar',
-            isDefault: true
-          },
-          {
-            id: 2,
-            title: 'Room in a rental unit',
-            description: 'Your own room in a home, plus access to shared spaces.',
-            icon: 'home',
-            isDefault: true
-          },
-          {
-            id: 3,
-            title: 'Free cancellation for 24 hours',
-            description: 'Get a full refund if you change your mind.',
-            icon: 'shield',
-            isDefault: true
-          },
-          {
-            id: 4,
-            title: 'Ocean View',
-            description: 'Stunning panoramic views of the ocean from every room.',
-            icon: 'star',
-            isDefault: false
+    const fetchRentalData = async () => {
+      if (isEditing) {
+        try {
+          setLoading(true);
+          const response = await rentService.getRentalById(rentId);
+          if (response.success) {
+            setFormData(response.data);
+          } else {
+            console.error('Failed to fetch rental data:', response.message);
+            alert('Failed to load rental data');
+            navigate('/rent');
           }
-        ],
-        amenities: ['Safety room', 'Safety unit location', 'Air conditioning', 'Parking', 'Restaurants'],
-        contactInfo: {
-          phone: '+1234567890',
-          email: 'info@villashirla.com',
-          address: 'South, Sinh, San Rafael, Mallorca'
-        },
-        gallery: [
-          { id: 1, url: '/images/villa-shirla-1.jpg', name: 'villa-shirla-1.jpg', isFeatured: true },
-          { id: 2, url: '/images/villa-shirla-2.jpg', name: 'villa-shirla-2.jpg', isFeatured: false },
-          { id: 3, url: '/images/villa-shirla-3.jpg', name: 'villa-shirla-3.jpg', isFeatured: false }
-        ],
-        featuredImage: '/images/villa-shirla-1.jpg',
-        status: 'available',
-        featured: true
-      };
-      setFormData(mockData);
-    }
-  }, [id, isEditing]);
+        } catch (error) {
+          console.error('Error fetching rental:', error);
+          alert('Error loading rental data');
+          navigate('/rent');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
 
+    fetchRentalData();
+  }, [rentId, isEditing, navigate]);
+
+  // Hàm trigger file input
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Xử lý upload ảnh với rentId
+  const handleImageUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    console.log('Files selected:', files);
+
+    if (files.length === 0) return;
+
+    setImageUploading(true);
+
+    try {
+      // Nếu đang create mới và chưa có rentId, xử lý local
+      if (!isEditing) {
+        console.log('Creating new rental - handling local preview only');
+        
+        const newImages = files.map(file => ({
+          id: Date.now() + Math.random(),
+          url: URL.createObjectURL(file),
+          name: file.name,
+          isFeatured: formData.gallery.length === 0,
+          file: file // Lưu file object để upload sau khi có rentId
+        }));
+
+        setFormData(prev => {
+          const updatedGallery = [...prev.gallery, ...newImages];
+          const featuredImage = prev.featuredImage || (updatedGallery.length > 0 ? updatedGallery[0].url : '');
+          
+          return {
+            ...prev,
+            gallery: updatedGallery,
+            featuredImage: featuredImage
+          };
+        });
+
+        // Lưu ảnh local để upload sau
+        setLocalImages(prev => [...prev, ...files]);
+      } else {
+        // Nếu đang edit, upload lên server ngay
+        const formDataToUpload = new FormData();
+        files.forEach(file => {
+          formDataToUpload.append('images', file);
+        });
+
+        console.log('Uploading images for rentId:', rentId);
+        
+        const response = await rentService.uploadRentalImages(rentId, formDataToUpload);
+        
+        if (response.success) {
+          console.log('Upload successful:', response.data);
+          setFormData(prev => ({
+            ...prev,
+            gallery: response.data.gallery,
+            featuredImage: response.data.featuredImage
+          }));
+        } else {
+          console.error('Upload failed:', response.message);
+          alert('Failed to upload images: ' + response.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      alert('Error uploading images: ' + (error.message || 'Unknown error'));
+    } finally {
+      setImageUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  // Hàm upload ảnh local sau khi tạo rental thành công
+  const uploadLocalImages = async (newRentId) => {
+    if (localImages.length === 0) return;
+
+    try {
+      const formDataToUpload = new FormData();
+      localImages.forEach(file => {
+        formDataToUpload.append('images', file);
+      });
+
+      console.log('Uploading local images for new rentId:', newRentId);
+      const response = await rentService.uploadRentalImages(newRentId, formDataToUpload);
+      
+      if (response.success) {
+        console.log('Local images upload successful');
+        // Có thể cập nhật state nếu cần, nhưng thường sẽ redirect nên không cần
+        setLocalImages([]); // Clear local images
+      }
+    } catch (error) {
+      console.error('Error uploading local images:', error);
+    }
+  };
+
+  // Xóa ảnh với API
+  const removeImage = async (imageId) => {
+    if (!window.confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+
+    // Nếu đang create (chưa có rentId), chỉ xóa local
+    if (!isEditing) {
+      setFormData(prev => {
+        const updatedGallery = prev.gallery.filter(img => img.id !== imageId);
+        const featuredImage = prev.featuredImage === prev.gallery.find(img => img.id === imageId)?.url 
+          ? (updatedGallery.length > 0 ? updatedGallery[0].url : '')
+          : prev.featuredImage;
+        
+        return {
+          ...prev,
+          gallery: updatedGallery,
+          featuredImage: featuredImage
+        };
+      });
+      return;
+    }
+
+    // Nếu đang edit, xóa trên server
+    try {
+      const response = await rentService.deleteRentalImage(rentId, imageId);
+      
+      if (response.success) {
+        setFormData(prev => ({
+          ...prev,
+          gallery: response.data.gallery,
+          featuredImage: response.data.featuredImage
+        }));
+      } else {
+        alert('Failed to delete image: ' + response.message);
+      }
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      alert('Error deleting image');
+    }
+  };
+
+  // Set featured image với API
+  const setAsFeatured = async (imageId) => {
+    // Nếu đang create (chưa có rentId), chỉ set local
+    if (!isEditing) {
+      setFormData(prev => ({
+        ...prev,
+        gallery: prev.gallery.map(img => ({
+          ...img,
+          isFeatured: img.id === imageId
+        })),
+        featuredImage: prev.gallery.find(img => img.id === imageId)?.url || ''
+      }));
+      return;
+    }
+
+    // Nếu đang edit, set trên server
+    try {
+      const response = await rentService.setFeaturedImage(rentId, imageId);
+      
+      if (response.success) {
+        setFormData(prev => ({
+          ...prev,
+          gallery: response.data.gallery,
+          featuredImage: response.data.featuredImage
+        }));
+      } else {
+        alert('Failed to set featured image: ' + response.message);
+      }
+    } catch (error) {
+      console.error('Error setting featured image:', error);
+      alert('Error setting featured image');
+    }
+  };
+
+  // Xử lý submit form
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Validate required fields
+      if (!formData.title || !formData.location || !formData.price || 
+          !formData.description || !formData.descriptionShort) {
+        alert('Please fill in all required fields');
+        setLoading(false);
+        return;
+      }
+
+      let response;
+      if (isEditing) {
+        response = await rentService.updateRental(rentId, formData);
+      } else {
+        response = await rentService.createRental(formData);
+        
+        // Nếu tạo mới thành công, upload ảnh local
+        if (response.success && response.data._id) {
+          const newRentId = response.data._id;
+          await uploadLocalImages(newRentId);
+        }
+      }
+
+      if (response.success) {
+        alert(`Rental ${isEditing ? 'updated' : 'created'} successfully!`);
+        navigate('/rent');
+      } else {
+        alert(`Failed to ${isEditing ? 'update' : 'create'} rental: ${response.message}`);
+      }
+    } catch (error) {
+      console.error('Error saving rental:', error);
+      alert(`Error ${isEditing ? 'updating' : 'creating'} rental`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Các hàm xử lý khác giữ nguyên
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -192,7 +375,6 @@ const RentEditor = () => {
     }));
   };
 
-  // Các hàm xử lý highlight giữ nguyên
   const startEditingHighlight = (highlight) => {
     setEditingHighlight(highlight);
     setNewHighlight({ title: highlight.title, description: highlight.description });
@@ -251,81 +433,11 @@ const RentEditor = () => {
     }));
   };
 
-  // Các hàm xử lý ảnh giữ nguyên
-  const handleImageUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-
-    setImageUploading(true);
-
-    const newImages = [];
-    for (const file of files) {
-      const newImage = {
-        id: Date.now() + Math.random(),
-        url: URL.createObjectURL(file),
-        name: file.name,
-        isFeatured: formData.gallery.length === 0
-      };
-
-      newImages.push(newImage);
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-
-    setFormData(prev => {
-      const updatedGallery = [...prev.gallery, ...newImages];
-      const featuredImage = prev.featuredImage || (updatedGallery.length > 0 ? updatedGallery[0].url : '');
-      
-      return {
-        ...prev,
-        gallery: updatedGallery,
-        featuredImage: featuredImage
-      };
-    });
-
-    setImageUploading(false);
-    event.target.value = '';
-  };
-
-  const setAsFeatured = (imageUrl) => {
-    setFormData(prev => ({
-      ...prev,
-      featuredImage: imageUrl,
-      gallery: prev.gallery.map(img => ({
-        ...img,
-        isFeatured: img.url === imageUrl
-      }))
-    }));
-  };
-
-  const removeImage = (imageId) => {
-    setFormData(prev => {
-      const updatedGallery = prev.gallery.filter(img => img.id !== imageId);
-      const featuredImage = updatedGallery.length > 0 ? updatedGallery[0].url : '';
-      
-      return {
-        ...prev,
-        gallery: updatedGallery,
-        featuredImage: prev.featuredImage === prev.gallery.find(img => img.id === imageId)?.url ? featuredImage : prev.featuredImage
-      };
-    });
-  };
-
   const sortedGallery = [...formData.gallery].sort((a, b) => {
     if (a.isFeatured) return -1;
     if (b.isFeatured) return 1;
     return 0;
   });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    setTimeout(() => {
-      console.log('Form data:', formData);
-      setLoading(false);
-      navigate('/rent');
-    }, 2000);
-  };
 
   // Hàm render preview - xử lý xuống dòng
   const renderDescriptionPreview = () => {
@@ -365,6 +477,17 @@ const RentEditor = () => {
     );
   };
 
+  if (loading && isEditing) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <span className="ml-3 text-gray-600">Loading rental data...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Header */}
@@ -386,7 +509,7 @@ const RentEditor = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Basic Information - Giữ nguyên */}
+        {/* Basic Information */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
           
@@ -432,6 +555,8 @@ const RentEditor = () => {
                   value={formData.price}
                   onChange={handleInputChange}
                   required
+                  min="0"
+                  step="0.01"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="500"
                 />
@@ -459,6 +584,7 @@ const RentEditor = () => {
                   name="beds"
                   value={formData.beds}
                   onChange={handleInputChange}
+                  min="0"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="2"
                 />
@@ -472,6 +598,7 @@ const RentEditor = () => {
                   name="bedrooms"
                   value={formData.bedrooms}
                   onChange={handleInputChange}
+                  min="0"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="1"
                 />
@@ -485,6 +612,7 @@ const RentEditor = () => {
                   name="bathrooms"
                   value={formData.bathrooms}
                   onChange={handleInputChange}
+                  min="0"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="1"
                 />
@@ -493,14 +621,29 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Image Gallery - Giữ nguyên */}
+        {/* Image Gallery */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Property Images</h2>
           
-          {/* Upload Area */}
+          {/* Upload Area - Sử dụng button trigger */}
           <div className="mb-6">
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+              disabled={imageUploading}
+            />
+            
+            <button
+              type="button"
+              onClick={triggerFileInput}
+              disabled={imageUploading}
+              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex flex-col items-center justify-center">
                 <svg className="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
@@ -508,16 +651,17 @@ const RentEditor = () => {
                   <span className="font-semibold">Click to upload</span> or drag and drop
                 </p>
                 <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX. 10MB each)</p>
+                {imageUploading && (
+                  <p className="text-xs text-blue-500 mt-2">Uploading...</p>
+                )}
               </div>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                disabled={imageUploading}
-              />
-            </label>
+            </button>
+            
+            {!isEditing && (
+              <p className="text-sm text-gray-500 mt-2 text-center">
+                Images will be saved to server after creating the rental
+              </p>
+            )}
           </div>
 
           {imageUploading && (
@@ -546,6 +690,9 @@ const RentEditor = () => {
                           src={formData.featuredImage} 
                           alt="Featured" 
                           className="w-full h-64 object-cover rounded-lg"
+                          onError={(e) => {
+                            e.target.src = '/images/placeholder.jpg';
+                          }}
                         />
                         <div className="absolute top-3 right-3">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-600 text-white">
@@ -585,6 +732,9 @@ const RentEditor = () => {
                             src={image.url}
                             alt={image.name}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.src = '/images/placeholder.jpg';
+                            }}
                           />
                           
                           {/* Overlay Actions */}
@@ -593,7 +743,7 @@ const RentEditor = () => {
                               {!image.isFeatured && (
                                 <button
                                   type="button"
-                                  onClick={() => setAsFeatured(image.url)}
+                                  onClick={() => setAsFeatured(image.id)}
                                   className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition-colors"
                                   title="Set as Featured"
                                 >
@@ -723,7 +873,7 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Highlights - Giữ nguyên */}
+        {/* Highlights */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Highlights</h2>
           
@@ -841,7 +991,7 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Amenities - Giữ nguyên */}
+        {/* Amenities */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Amenities</h2>
           
@@ -860,57 +1010,8 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Contact Information - Giữ nguyên */}
-        {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Contact Information</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.contactInfo.phone}
-                onChange={handleContactChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="+1234567890"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.contactInfo.email}
-                onChange={handleContactChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="info@example.com"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Address
-              </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.contactInfo.address}
-                onChange={handleContactChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Full physical address"
-              />
-            </div>
-          </div>
-        </div> */}
-
-        {/* Status & Featured - Giữ nguyên */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        {/* Status & Featured */}
+        <div className="bg-white rounded-lg shadowSm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Settings</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -945,7 +1046,7 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Submit Buttons - Giữ nguyên */}
+        {/* Submit Buttons */}
         <div className="flex justify-end space-x-4">
           <button
             type="button"

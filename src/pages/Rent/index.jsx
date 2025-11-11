@@ -1,139 +1,149 @@
 // components/RentList.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import rentService from '../../services/rentService';
 
 const RentList = () => {
   const [rentals, setRentals] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterProperty, setFilterProperty] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState('default');
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
+  // Fetch rentals from API
   useEffect(() => {
-    const mockRentals = [
-      {
-        id: 1,
-        title: 'Villa Shirla',
-        location: 'South, Sinh, San Rafael',
-        price: 500,
-        priceUnit: 'per night',
-        beds: 2,
-        bedrooms: 1,
-        bathrooms: 1,
-        thumbnail: '/images/villa-shirla-1.jpg',
-        featured: true,
-        status: 'available',
-        description: 'Luxury villa with panoramic views',
-        createdAt: '2024-01-15',
-        updatedAt: '2024-01-15',
-        author: 'Admin'
-      },
-      {
-        id: 2,
-        title: 'Villa Palma',
-        location: 'North, Palma, Mallorca',
-        price: 450,
-        priceUnit: 'per night',
-        beds: 3,
-        bedrooms: 2,
-        bathrooms: 2,
-        thumbnail: '/images/villa-shirla-2.jpg',
-        featured: false,
-        status: 'available',
-        description: 'Modern villa with private pool',
-        createdAt: '2024-01-14',
-        updatedAt: '2024-01-14',
-        author: 'Editor'
-      },
-      {
-        id: 3,
-        title: 'Can Bancos',
-        location: 'Jackie, Julia Town',
-        price: 150,
-        priceUnit: 'for 2 nights',
-        beds: 2,
-        bedrooms: 1,
-        bathrooms: 1,
-        thumbnail: '/images/can-bancos.jpg',
-        featured: true,
-        status: 'occupied',
-        description: 'Breathtaking grand villa near Jackie',
-        createdAt: '2024-01-13',
-        updatedAt: '2024-01-16',
-        author: 'Manager'
-      },
-      {
-        id: 4,
-        title: 'Villa Marina',
-        location: 'South, Sinh, San Rafael',
-        price: 600,
-        priceUnit: 'per night',
-        beds: 4,
-        bedrooms: 3,
-        bathrooms: 2,
-        thumbnail: '/images/villa-marina.jpg',
-        featured: false,
-        status: 'available',
-        description: 'Beachfront luxury villa',
-        createdAt: '2024-01-12',
-        updatedAt: '2024-01-12',
-        author: 'Admin'
+    fetchRentals();
+  }, [currentPage, searchTerm, filterStatus, sortBy]);
+
+  const fetchRentals = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        page: currentPage,
+        limit: 10,
+        search: searchTerm,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        sort: getSortParam(sortBy)
+      };
+
+      const response = await rentService.getAllRentals(params);
+      
+      if (response.success) {
+        setRentals(response.data);
+        setTotalPages(response.pagination?.pages || 1);
+        setTotalItems(response.pagination?.total || 0);
+      } else {
+        console.error('Failed to fetch rentals:', response.message);
+        alert('Failed to load rental properties');
       }
-    ];
-    
-    setTimeout(() => {
-      setRentals(mockRentals);
+    } catch (error) {
+      console.error('Error fetching rentals:', error);
+      alert('Error loading rental properties');
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
-
-  const propertyTypes = ['all', 'properties', 'lifestyle', 'product'];
-
-  const filteredRentals = rentals.filter(rental => {
-    const matchesSearch = rental.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         rental.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProperty = filterProperty === 'all' || rental.title.toLowerCase().includes(filterProperty);
-    
-    return matchesSearch && matchesProperty;
-  });
-
-  const sortedRentals = [...filteredRentals].sort((a, b) => {
-    switch (sortBy) {
-      case 'price-low':
-        return a.price - b.price;
-      case 'price-high':
-        return b.price - a.price;
-      case 'name':
-        return a.title.localeCompare(b.title);
-      case 'date-new':
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      case 'date-old':
-        return new Date(a.createdAt) - new Date(b.createdAt);
-      default:
-        return a.featured === b.featured ? 0 : a.featured ? -1 : 1;
-    }
-  });
-
-  const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc muốn xóa rental property này?')) {
-      setRentals(rentals.filter(item => item.id !== id));
-      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
     }
   };
 
-  const handleBulkDelete = () => {
+  const getSortParam = (sortBy) => {
+    switch (sortBy) {
+      case 'price-low':
+        return 'price';
+      case 'price-high':
+        return '-price';
+      case 'name':
+        return 'title';
+      case 'date-new':
+        return '-createdAt';
+      case 'date-old':
+        return 'createdAt';
+      default:
+        return '-featured,-createdAt';
+    }
+  };
+
+  // Delete rental with API
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this rental property?')) {
+      try {
+        const response = await rentService.deleteRental(id);
+        if (response.success) {
+          alert('Rental property deleted successfully');
+          fetchRentals(); // Refresh the list
+          setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+        } else {
+          alert('Failed to delete rental: ' + response.message);
+        }
+      } catch (error) {
+        console.error('Error deleting rental:', error);
+        alert('Error deleting rental property');
+      }
+    }
+  };
+
+  // Bulk delete with API
+  const handleBulkDelete = async () => {
     if (selectedItems.length === 0) return;
     
-    if (window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} rental properties đã chọn?`)) {
-      setRentals(rentals.filter(item => !selectedItems.includes(item.id)));
-      setSelectedItems([]);
+    if (window.confirm(`Are you sure you want to delete ${selectedItems.length} selected rental properties?`)) {
+      try {
+        const deletePromises = selectedItems.map(id => rentService.deleteRental(id));
+        const results = await Promise.allSettled(deletePromises);
+        
+        const successfulDeletes = results.filter(result => result.status === 'fulfilled' && result.value.success);
+        const failedDeletes = results.filter(result => result.status === 'rejected' || !result.value?.success);
+        
+        if (failedDeletes.length === 0) {
+          alert(`Successfully deleted ${successfulDeletes.length} rental properties`);
+        } else {
+          alert(`Deleted ${successfulDeletes.length} properties, but failed to delete ${failedDeletes.length} properties`);
+        }
+        
+        fetchRentals(); // Refresh the list
+        setSelectedItems([]);
+      } catch (error) {
+        console.error('Error in bulk delete:', error);
+        alert('Error deleting selected rental properties');
+      }
+    }
+  };
+
+  // Toggle featured status
+  const toggleFeatured = async (id, currentFeatured) => {
+    try {
+      const response = await rentService.toggleFeatured(id, !currentFeatured);
+      if (response.success) {
+        fetchRentals(); // Refresh the list
+      } else {
+        alert('Failed to update featured status: ' + response.message);
+      }
+    } catch (error) {
+      console.error('Error toggling featured:', error);
+      alert('Error updating featured status');
+    }
+  };
+
+  // Update rental status
+  const updateStatus = async (id, newStatus) => {
+    try {
+      const response = await rentService.updateRentalStatus(id, newStatus);
+      if (response.success) {
+        fetchRentals(); // Refresh the list
+      } else {
+        alert('Failed to update status: ' + response.message);
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Error updating rental status');
     }
   };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedItems(filteredRentals.map(item => item.id));
+      setSelectedItems(rentals.map(item => item._id));
     } else {
       setSelectedItems([]);
     }
@@ -191,10 +201,36 @@ const RentList = () => {
     return `$${price} ${unit}`;
   };
 
-  if (loading) {
+  const getThumbnailUrl = (rental) => {
+    if (rental.featuredImage) {
+      return rental.featuredImage;
+    }
+    if (rental.gallery && rental.gallery.length > 0) {
+      return rental.gallery[0].url;
+    }
+    return '/images/placeholder-property.jpg';
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  if (loading && rentals.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <span className="ml-3 text-gray-600">Loading rental properties...</span>
+        </div>
       </div>
     );
   }
@@ -226,7 +262,7 @@ const RentList = () => {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search properties..."
+                  placeholder="Search properties by title or location..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -235,23 +271,6 @@ const RentList = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-            </div>
-            
-            {/* Category Filter Tabs */}
-            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-              {propertyTypes.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setFilterProperty(category)}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    filterProperty === category
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1)}
-                </button>
-              ))}
             </div>
           </div>
 
@@ -271,7 +290,7 @@ const RentList = () => {
           )}
         </div>
 
-        {/* Additional Filters - ĐÃ LOẠI BỎ LOCATION FILTER */}
+        {/* Additional Filters */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -296,11 +315,14 @@ const RentList = () => {
               Status
             </label>
             <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Status</option>
               <option value="available">Available</option>
               <option value="occupied">Occupied</option>
+              <option value="maintenance">Under Maintenance</option>
             </select>
           </div>
         </div>
@@ -317,7 +339,7 @@ const RentList = () => {
                     type="checkbox"
                     className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     onChange={handleSelectAll}
-                    checked={selectedItems.length === filteredRentals.length && filteredRentals.length > 0}
+                    checked={selectedItems.length === rentals.length && rentals.length > 0}
                   />
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -333,9 +355,6 @@ const RentList = () => {
                   Details
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Author
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -347,26 +366,29 @@ const RentList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {sortedRentals.map((rental) => (
+              {rentals.map((rental) => (
                 <tr 
-                  key={rental.id} 
-                  className={selectedItems.includes(rental.id) ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                  key={rental._id} 
+                  className={selectedItems.includes(rental._id) ? 'bg-blue-50' : 'hover:bg-gray-50'}
                 >
                   <td className="relative w-12 px-6 sm:w-16 sm:px-8">
                     <input
                       type="checkbox"
                       className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={selectedItems.includes(rental.id)}
-                      onChange={() => handleSelectItem(rental.id)}
+                      checked={selectedItems.includes(rental._id)}
+                      onChange={() => handleSelectItem(rental._id)}
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-12 h-12 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
                         <img 
-                          src={rental.thumbnail} 
+                          src={getThumbnailUrl(rental)} 
                           alt={rental.title}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.src = '/images/placeholder-property.jpg';
+                          }}
                         />
                       </div>
                       <div className="ml-4">
@@ -377,7 +399,7 @@ const RentList = () => {
                           {getFeaturedBadge(rental.featured)}
                         </div>
                         <p className="text-sm text-gray-500 line-clamp-1 mt-1">
-                          {rental.description}
+                          {rental.descriptionShort || rental.description?.substring(0, 50) + '...'}
                         </p>
                       </div>
                     </div>
@@ -394,20 +416,17 @@ const RentList = () => {
                     <div className="text-sm text-gray-900 space-y-1">
                       <div className="flex items-center space-x-2">
                         <span className="text-gray-600">Beds:</span>
-                        <span className="font-medium">{rental.beds}</span>
+                        <span className="font-medium">{rental.beds || 0}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-gray-600">Bedrooms:</span>
-                        <span className="font-medium">{rental.bedrooms}</span>
+                        <span className="font-medium">{rental.bedrooms || 0}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-gray-600">Bathrooms:</span>
-                        <span className="font-medium">{rental.bathrooms}</span>
+                        <span className="font-medium">{rental.bathrooms || 0}</span>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{rental.author}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(rental.createdAt)}
@@ -417,8 +436,21 @@ const RentList = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => toggleFeatured(rental._id, rental.featured)}
+                        className={`p-1 rounded transition-colors ${
+                          rental.featured 
+                            ? 'text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50' 
+                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                        title={rental.featured ? 'Remove featured' : 'Mark as featured'}
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                      </button>
                       <Link
-                        to={`/rent/edit/${rental.id}`}
+                        to={`/rent/edit/${rental._id}`}
                         className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
                         title="Edit"
                       >
@@ -426,18 +458,8 @@ const RentList = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </Link>
-                      <Link
-                        to={`/rent/view/${rental.id}`}
-                        className="text-green-600 hover:text-green-900 transition-colors p-1 rounded hover:bg-green-50"
-                        title="View"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </Link>
                       <button
-                        onClick={() => handleDelete(rental.id)}
+                        onClick={() => handleDelete(rental._id)}
                         className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50"
                         title="Delete"
                       >
@@ -453,19 +475,19 @@ const RentList = () => {
           </table>
         </div>
 
-        {sortedRentals.length === 0 && (
+        {rentals.length === 0 && !loading && (
           <div className="text-center py-12">
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No rental properties found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || filterProperty !== 'all'
+              {searchTerm || filterStatus !== 'all'
                 ? 'Try adjusting your search or filters' 
                 : 'Get started by creating your first rental property'
               }
             </p>
-            {!searchTerm && filterProperty === 'all' && (
+            {!searchTerm && filterStatus === 'all' && (
               <Link
                 to="/rent/create"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors inline-flex items-center"
@@ -480,15 +502,26 @@ const RentList = () => {
       {/* Pagination và Summary */}
       <div className="flex items-center justify-between mt-6">
         <div className="text-sm text-gray-700">
-          Showing <span className="font-medium">{sortedRentals.length}</span> of{' '}
-          <span className="font-medium">{rentals.length}</span> properties
+          Showing <span className="font-medium">{rentals.length}</span> of{' '}
+          <span className="font-medium">{totalItems}</span> properties
         </div>
         
         <div className="flex space-x-2">
-          <button className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button 
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
+            className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
             Previous
           </button>
-          <button className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <span className="px-3 py-2 text-sm text-gray-700">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button 
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
             Next
           </button>
         </div>

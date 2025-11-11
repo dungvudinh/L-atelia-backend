@@ -1,11 +1,10 @@
 // services/rentService.js
-import api from './api';
-
+import axiosClient from '../configs/axios';
 const rentService = {
   // GET ALL RENTALS
   getAllRentals: async (params = {}) => {
     try {
-      const response = await api.get('/rent', { params });
+      const response = await axiosClient.get('/v1/rent', { params });
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -15,7 +14,7 @@ const rentService = {
   // GET RENTAL BY ID
   getRentalById: async (id) => {
     try {
-      const response = await api.get(`/rent/${id}`);
+      const response = await axiosClient.get(`/v1/rent/${id}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -25,7 +24,8 @@ const rentService = {
   // CREATE NEW RENTAL
   createRental: async (rentalData) => {
     try {
-      const response = await api.post('/rent', rentalData);
+      console.log(rentalData)
+      const response = await axiosClient.post('/v1/rent', rentalData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -35,7 +35,7 @@ const rentService = {
   // UPDATE RENTAL
   updateRental: async (id, rentalData) => {
     try {
-      const response = await api.put(`/rent/${id}`, rentalData);
+      const response = await axiosClient.put(`/v1/rent/${id}`, rentalData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -45,7 +45,7 @@ const rentService = {
   // DELETE RENTAL
   deleteRental: async (id) => {
     try {
-      const response = await api.delete(`/rent/${id}`);
+      const response = await axiosClient.delete(`/v1/rent/${id}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -55,7 +55,7 @@ const rentService = {
   // UPLOAD RENTAL IMAGES
   uploadRentalImages: async (id, formData) => {
     try {
-      const response = await api.post(`/rent/${id}/upload`, formData, {
+      const response = await axiosClient.post(`/v1/rent/${id}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -69,7 +69,7 @@ const rentService = {
   // DELETE RENTAL IMAGE
   deleteRentalImage: async (id, imageId) => {
     try {
-      const response = await api.delete(`/rent/${id}/images/${imageId}`);
+      const response = await axiosClient.delete(`/v1/rent/${id}/images/${imageId}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -79,7 +79,7 @@ const rentService = {
   // SET FEATURED IMAGE
   setFeaturedImage: async (id, imageId) => {
     try {
-      const response = await api.put(`/rent/${id}/featured-image`, { imageId });
+      const response = await axiosClient.put(`/v1/rent/${id}/featured-image`, { imageId });
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -89,7 +89,7 @@ const rentService = {
   // UPDATE RENTAL STATUS
   updateRentalStatus: async (id, status) => {
     try {
-      const response = await api.patch(`/rent/${id}/status`, { status });
+      const response = await axiosClient.patch(`/v1/rent/${id}/status`, { status });
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -99,7 +99,7 @@ const rentService = {
   // TOGGLE FEATURED
   toggleFeatured: async (id, featured) => {
     try {
-      const response = await api.patch(`/rent/${id}/featured`, { featured });
+      const response = await axiosClient.patch(`/v1/rent/${id}/featured`, { featured });
       return response.data;
     } catch (error) {
       throw error.response?.data || error;

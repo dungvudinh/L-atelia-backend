@@ -9,8 +9,11 @@ const routes = {
     editMedia:'/media/edit/:mediaId', 
     rent:'/rent', 
     createRent:'/rent/create', 
+    editRent:'rent/edit/:rentId', 
     booking:'/bookings', 
-    bookingEditor:'/bookings/edit/:bookingId'
+    bookingEditor:'/bookings/edit/:bookingId', 
+    login:'/login', 
+    user:'/users'
   };
   
   export default routes;

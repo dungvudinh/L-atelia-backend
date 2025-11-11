@@ -6,9 +6,12 @@ import ProjectEditor from '../pages/Projects/editor';
 import Media from '../pages/Media';
 import MediaEditor from '../pages/Media/editor';
 import Rent from '../pages/Rent/index';
-import CreateRent from '../pages/Rent/create';
+// import CreateRent from '../pages/Rent/create';
 import Booking from '../pages/Booking';
 import BookingEditor from '../pages/Booking/editor';
+import RentEditor from "../pages/Rent/editor";
+import Login from "../pages/Login";
+import User from "../pages/User";
 const publicRoutes = [
   {
     path:routes.dashboard, 
@@ -44,8 +47,12 @@ const publicRoutes = [
   }, 
   {
     path:routes.createRent, 
-    component:CreateRent
+    component:RentEditor
   }, 
+  {
+    path:routes.editRent, 
+    component:RentEditor
+  },
   {
     path:routes.booking, 
     component:Booking
@@ -57,6 +64,15 @@ const publicRoutes = [
   {
     path:routes.editProject, 
     component:ProjectEditor
+  }, 
+  {
+    path:routes.login, 
+    component:Login, 
+    layout:null
+  }, 
+  {
+    path:routes.user, 
+    component:User
   }
 ];
 

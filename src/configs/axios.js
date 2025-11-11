@@ -9,10 +9,10 @@ const axiosClient = axios.create({
 })
 
 // ✅ Response Interceptor (Global Error Handling)
-axiosClient.interceptors.response.use(
+axiosClient.interceptors.request.use(
   (config) => {
     // tu dong gui token khi can
-    const token = localStorage.getItem('accessToken')
+    const token = localStorage.getItem('token')
     if (token)
       config.headers.Authorization = `Bearer ${token}`
     return config
@@ -30,5 +30,16 @@ axiosClient.interceptors.response.use(
   }
 )
 
-
+axiosClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 export default axiosClient
