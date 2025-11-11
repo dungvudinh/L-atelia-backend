@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 const RentList = () => {
   const [rentals, setRentals] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterLocation, setFilterLocation] = useState('all');
   const [filterProperty, setFilterProperty] = useState('all');
   const [sortBy, setSortBy] = useState('default');
   const [loading, setLoading] = useState(true);
@@ -89,16 +88,14 @@ const RentList = () => {
     }, 1000);
   }, []);
 
-  const locations = ['all', 'South, Sinh, San Rafael', 'North, Palma, Mallorca', 'Jackie, Julia Town'];
-  const propertyTypes = ['all', 'villa', 'apartment', 'house'];
+  const propertyTypes = ['all', 'properties', 'lifestyle', 'product'];
 
   const filteredRentals = rentals.filter(rental => {
     const matchesSearch = rental.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          rental.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLocation = filterLocation === 'all' || rental.location === filterLocation;
     const matchesProperty = filterProperty === 'all' || rental.title.toLowerCase().includes(filterProperty);
     
-    return matchesSearch && matchesLocation && matchesProperty;
+    return matchesSearch && matchesProperty;
   });
 
   const sortedRentals = [...filteredRentals].sort((a, b) => {
@@ -242,7 +239,7 @@ const RentList = () => {
             
             {/* Category Filter Tabs */}
             <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-              {['all', 'properties', 'lifestyle', 'product'].map((category) => (
+              {propertyTypes.map((category) => (
                 <button
                   key={category}
                   onClick={() => setFilterProperty(category)}
@@ -274,25 +271,8 @@ const RentList = () => {
           )}
         </div>
 
-        {/* Additional Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Location
-            </label>
-            <select
-              value={filterLocation}
-              onChange={(e) => setFilterLocation(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {locations.map(location => (
-                <option key={location} value={location}>
-                  {location === 'all' ? 'All Locations' : location}
-                </option>
-              ))}
-            </select>
-          </div>
-
+        {/* Additional Filters - ĐÃ LOẠI BỎ LOCATION FILTER */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Sort by
@@ -480,12 +460,12 @@ const RentList = () => {
             </svg>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No rental properties found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || filterLocation !== 'all' || filterProperty !== 'all'
+              {searchTerm || filterProperty !== 'all'
                 ? 'Try adjusting your search or filters' 
                 : 'Get started by creating your first rental property'
               }
             </p>
-            {!searchTerm && filterLocation === 'all' && filterProperty === 'all' && (
+            {!searchTerm && filterProperty === 'all' && (
               <Link
                 to="/rent/create"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors inline-flex items-center"

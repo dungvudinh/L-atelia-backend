@@ -1,7 +1,7 @@
 // src/pages/admin/media/Media.jsx
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit, Trash2, Eye, Calendar, FolderOpen, Image, Video, FileText, Building, User, Package } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Calendar, FileText, Image, Tag } from 'lucide-react';
 import { mediaService } from '../../services/mediaService';
 
 const Media = () => {
@@ -9,20 +9,21 @@ const Media = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedItems, setSelectedItems] = useState([]);
   const [deleteLoading, setDeleteLoading] = useState(null);
 
+  // Fetch media from API
   const fetchMedia = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await mediaService.getMedia();
+      console.log('Media API response:', response);
       
       if (response.success) {
-        setMedia(response.data.media || []);
+        setMedia(response.data || []);
       } else {
         throw new Error(response.message || 'Failed to fetch media');
       }
@@ -38,167 +39,117 @@ const Media = () => {
     fetchMedia();
   }, []);
 
-  const getImageUrl = (filePath) => {
-    if (!filePath) return null;
+  // Hàm xử lý hiển thị ảnh
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
     
-    if (filePath.startsWith('http') || filePath.startsWith('blob:') || filePath.startsWith('data:')) {
-      return filePath;
+    // Nếu là URL đầy đủ (http/https) hoặc data URL
+    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+      return imagePath;
     }
     
+    // Nếu là đường dẫn tương đối
     const baseUrl = 'http://localhost:3000';
-    const normalizedPath = filePath.replace(/\\/g, '/');
-    return `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    const normalizedPath = imagePath.replace(/\\/g, '/');
+    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    
+    return finalUrl;
   };
 
-  const getFileIcon = (mimeType, category) => {
-    if (mimeType.startsWith('image/')) {
-      return <Image size={20} className="text-blue-500" />;
-    } else if (mimeType.startsWith('video/')) {
-      return <Video size={20} className="text-purple-500" />;
+  // Hàm hiển thị thumbnail
+  const renderThumbnail = (mediaItem) => {
+    const imageUrl = getImageUrl(mediaItem.featuredImage);
+    console.log(imageUrl)
+    if (imageUrl) {
+      return (
+        <img 
+          src={imageUrl} 
+          alt={mediaItem.title}
+          crossOrigin="anonymous"
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            console.error('Image failed to load:', imageUrl);
+            e.target.src = 'https://via.placeholder.com/40x40?text=Error';
+          }}
+          loading="lazy"
+        />
+      );
     } else {
-      return <FileText size={20} className="text-gray-500" />;
+      return (
+        <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+          <FileText size={16} className="text-gray-500" />
+        </div>
+      );
     }
   };
 
-  const getCategoryIcon = (category) => {
-    switch (category) {
-      case 'Properties':
-        return <Building size={16} className="text-green-600" />;
-      case 'Lifestyle':
-        return <User size={16} className="text-blue-600" />;
-      case 'Product':
-        return <Package size={16} className="text-orange-600" />;
-      default:
-        return <FolderOpen size={16} className="text-gray-600" />;
-    }
-  };
-
-  const getCategoryBadge = (category) => {
-    const categoryConfig = {
-      Properties: { color: 'bg-green-100 text-green-800', label: 'Properties' },
-      Lifestyle: { color: 'bg-blue-100 text-blue-800', label: 'Lifestyle' },
-      Product: { color: 'bg-orange-100 text-orange-800', label: 'Product' }
-    };
-    
-    const config = categoryConfig[category] || { color: 'bg-gray-100 text-gray-800', label: category };
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-        {getCategoryIcon(category)}
-        <span className="ml-1">{config.label}</span>
-      </span>
-    );
-  };
-
-  const getTypeBadge = (type) => {
-    const typeConfig = {
-      image: { color: 'bg-blue-100 text-blue-800', label: 'Image' },
-      video: { color: 'bg-purple-100 text-purple-800', label: 'Video' },
-      document: { color: 'bg-gray-100 text-gray-800', label: 'Document' }
-    };
-    
-    const config = typeConfig[type] || { color: 'bg-gray-100 text-gray-800', label: type };
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-        {config.label}
-      </span>
-    );
-  };
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      active: { color: 'bg-green-100 text-green-800', label: 'Active' },
-      inactive: { color: 'bg-gray-100 text-gray-800', label: 'Inactive' }
-    };
-    
-    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-        {config.label}
-      </span>
-    );
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return 'N/A';
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
+  // Handle delete media
   const handleDelete = async (mediaId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa media này?')) {
+    if (!window.confirm('Bạn có chắc muốn xóa bài viết này?')) {
       return;
     }
 
     try {
       setDeleteLoading(mediaId);
+      
       const response = await mediaService.deleteMedia(mediaId);
       
       if (response.success) {
         setMedia(prev => prev.filter(m => m._id !== mediaId));
         setSelectedItems(prev => prev.filter(id => id !== mediaId));
-        alert('Xóa media thành công');
+        alert('Xóa bài viết thành công');
       } else {
         throw new Error(response.message || 'Failed to delete media');
       }
     } catch (err) {
       console.error('Error deleting media:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa media';
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa bài viết';
       alert(`Lỗi: ${errorMessage}`);
     } finally {
       setDeleteLoading(null);
     }
   };
 
+  // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedItems.length === 0) {
-      alert('Vui lòng chọn ít nhất một media để xóa');
+      alert('Vui lòng chọn ít nhất một bài viết để xóa');
       return;
     }
 
-    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} media đã chọn?`)) {
+    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} bài viết đã chọn?`)) {
       return;
     }
 
     try {
-      await mediaService.bulkDeleteMedia(selectedItems);
+      // Xóa từng cái một
+      const deletePromises = selectedItems.map(id => mediaService.deleteMedia(id));
+      await Promise.all(deletePromises);
+      
       setMedia(prev => prev.filter(m => !selectedItems.includes(m._id)));
       setSelectedItems([]);
-      alert(`Đã xóa ${selectedItems.length} media thành công`);
+      
+      alert(`Đã xóa ${selectedItems.length} bài viết thành công`);
     } catch (err) {
       console.error('Error bulk deleting media:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa các media';
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa các bài viết';
       alert(`Lỗi: ${errorMessage}`);
     }
   };
 
-  const filteredMedia = media.filter(item => {
-    const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    return matchesSearch && matchesType && matchesCategory && matchesStatus;
+  // Filter media
+  const filteredMedia = media.filter(mediaItem => {
+    const matchesSearch = mediaItem.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         mediaItem.excerpt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         mediaItem.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = filterCategory === 'all' || mediaItem.category === filterCategory;
+    const matchesStatus = filterStatus === 'all' || mediaItem.status === filterStatus;
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedItems(filteredMedia.map(media => media._id));
+      setSelectedItems(filteredMedia.map(mediaItem => mediaItem._id));
     } else {
       setSelectedItems([]);
     }
@@ -212,17 +163,70 @@ const Media = () => {
     }
   };
 
-  // Loading state
-  if (loading) {
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      published: { color: 'bg-green-100 text-green-800', label: 'Đã đăng' },
+      draft: { color: 'bg-yellow-100 text-yellow-800', label: 'Bản nháp' }
+    };
+    
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
+    
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải dữ liệu...</p>
-        </div>
-      </div>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
     );
-  }
+  };
+
+  const getCategoryBadge = (category) => {
+    const categoryConfig = {
+      lifestyle: { color: 'bg-purple-100 text-purple-800', label: 'Lifestyle' },
+      properties: { color: 'bg-blue-100 text-blue-800', label: 'Properties' },
+      product: { color: 'bg-orange-100 text-orange-800', label: 'Product' }
+    };
+    
+    const config = categoryConfig[category] || { color: 'bg-gray-100 text-gray-800', label: category };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  // Truncate content for preview
+  const truncateContent = (content, length = 100) => {
+    if (!content) return 'Chưa có nội dung';
+    
+    // Remove HTML tags và decode HTML entities
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    let text = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Alternative: sử dụng regex để decode các HTML entities phổ biến
+    // text = content.replace(/<[^>]*>/g, '') // Remove HTML tags first
+    //   .replace(/&nbsp;/g, ' ') // Replace &nbsp; với space
+    //   .replace(/&amp;/g, '&') // Replace &amp; với &
+    //   .replace(/&lt;/g, '<') // Replace &lt; với <
+    //   .replace(/&gt;/g, '>') // Replace &gt; với >
+    //   .replace(/&quot;/g, '"') // Replace &quot; với "
+    //   .replace(/&#39;/g, "'"); // Replace &#39; với '
+    
+    
+    // Trim và xử lý khoảng trắng
+    text = text.trim().replace(/\s+/g, ' ');
+    
+    return text.length > length ? text.substring(0, length) + '...' : text;
+  };
 
   // Error state
   if (error) {
@@ -230,7 +234,7 @@ const Media = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 mb-4">
-            <FolderOpen size={64} className="mx-auto" />
+            <FileText size={64} className="mx-auto" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Lỗi khi tải dữ liệu</h3>
           <p className="text-gray-600 mb-4">{error}</p>
@@ -250,8 +254,8 @@ const Media = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý Media</h1>
-          <p className="text-gray-600">Tổng số: {filteredMedia.length} media</p>
+          <h1 className="text-2xl font-bold text-gray-900">Quản lý Bài viết</h1>
+          <p className="text-gray-600">Tổng số: {filteredMedia.length} bài viết</p>
         </div>
         <div className="flex items-center space-x-3">
           {selectedItems.length > 0 && (
@@ -268,7 +272,7 @@ const Media = () => {
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
           >
             <Plus size={20} className="mr-2" />
-            Upload Media
+            Tạo Bài viết
           </Link>
         </div>
       </div>
@@ -287,24 +291,14 @@ const Media = () => {
             />
           </div>
           <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Tất cả loại</option>
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-            <option value="document">Document</option>
-          </select>
-          <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tất cả danh mục</option>
-            <option value="Properties">Properties</option>
-            <option value="Lifestyle">Lifestyle</option>
-            <option value="Product">Product</option>
+            <option value="lifestyle">Lifestyle</option>
+            <option value="properties">Properties</option>
+            <option value="product">Product</option>
           </select>
           <select
             value={filterStatus}
@@ -312,8 +306,8 @@ const Media = () => {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="published">Đã xuất bản</option>
+            <option value="draft">Bản nháp</option>
           </select>
           <button
             onClick={fetchMedia}
@@ -324,7 +318,7 @@ const Media = () => {
         </div>
       </div>
 
-      {/* Media Grid */}
+      {/* Media Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -339,19 +333,19 @@ const Media = () => {
                   />
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Media
+                  Bài viết
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Mô tả
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tags
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Danh mục
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Loại
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Kích thước
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ngày upload
+                  Ngày tạo
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Trạng thái
@@ -362,94 +356,96 @@ const Media = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMedia.map((item) => (
+              {filteredMedia.map((mediaItem) => (
                 <tr 
-                  key={item._id} 
-                  className={selectedItems.includes(item._id) ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                  key={mediaItem._id} 
+                  className={selectedItems.includes(mediaItem._id) ? 'bg-blue-50' : 'hover:bg-gray-50'}
                 >
                   <td className="relative w-12 px-6 sm:w-16 sm:px-8">
                     <input
                       type="checkbox"
                       className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={selectedItems.includes(item._id)}
-                      onChange={() => handleSelectItem(item._id)}
+                      checked={selectedItems.includes(mediaItem._id)}
+                      onChange={() => handleSelectItem(mediaItem._id)}
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="w-12 h-12 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                        {item.mimeType?.startsWith('image/') ? (
-                          <img 
-                            src={getImageUrl(item.filePath)} 
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                            crossOrigin="anonymous"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/48x48?text=Error';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                            {getFileIcon(item.mimeType, item.category)}
-                          </div>
-                        )}
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                        {renderThumbnail(mediaItem)}
                       </div>
                       <div className="ml-4">
                         <div className="flex items-center space-x-2">
-                          <h4 className="text-sm font-semibold text-gray-900">
-                            {item.title || 'Untitled'}
+                          <h4 className="text-sm font-semibold text-gray-900 max-w-xs truncate">
+                            {mediaItem.title || 'Chưa có tiêu đề'}
                           </h4>
                         </div>
-                        <p className="text-sm text-gray-500 line-clamp-1 mt-1">
-                          {item.description || 'No description'}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {mediaItem.excerpt ? truncateContent(mediaItem.excerpt, 50) : 'Chưa có mô tả'}
                         </p>
-                        <div className="flex items-center mt-1 text-xs text-gray-400">
-                          <span>{item.fileName}</span>
-                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getCategoryBadge(item.category)}
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900 max-w-xs">
+                      <p className="line-clamp-2">
+                        {truncateContent(mediaItem.content, 80)}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1 max-w-xs">
+                      {mediaItem.tags && mediaItem.tags.slice(0, 3).map((tag, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800"
+                        >
+                          <Tag size={10} className="mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                      {mediaItem.tags && mediaItem.tags.length > 3 && (
+                        <span className="text-xs text-gray-500">
+                          +{mediaItem.tags.length - 3} more
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getTypeBadge(item.type)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatFileSize(item.fileSize)}
+                    {getCategoryBadge(mediaItem.category)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
                       <Calendar size={14} className="mr-1" />
-                      {formatDate(item.createdAt)}
+                      {formatDate(mediaItem.createdAt)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(item.status)}
+                    {getStatusBadge(mediaItem.status)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
                       <Link
-                        to={`/media/${item._id}`}
+                        to={`/media/${mediaItem._id}`}
                         className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
                         title="Xem chi tiết"
                       >
                         <Eye size={16} />
                       </Link>
                       <Link
-                        to={`/media/edit/${item._id}`}
+                        to={`/media/edit/${mediaItem._id}`}
                         className="text-green-600 hover:text-green-900 transition-colors p-1 rounded hover:bg-green-50"
                         title="Chỉnh sửa"
                       >
                         <Edit size={16} />
                       </Link>
                       <button 
-                        onClick={() => handleDelete(item._id)}
-                        disabled={deleteLoading === item._id}
+                        onClick={() => handleDelete(mediaItem._id)}
+                        disabled={deleteLoading === mediaItem._id}
                         className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50 disabled:opacity-50"
-                        title="Xóa media"
+                        title="Xóa bài viết"
                       >
-                        {deleteLoading === item._id ? (
+                        {deleteLoading === mediaItem._id ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
                         ) : (
                           <Trash2 size={16} />
@@ -466,27 +462,27 @@ const Media = () => {
         {filteredMedia.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
-              <FolderOpen size={64} className="mx-auto" />
+              <FileText size={64} className="mx-auto" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || filterType !== 'all' || filterCategory !== 'all' || filterStatus !== 'all'
-                ? 'Không tìm thấy media phù hợp' 
-                : 'Chưa có media nào'
+              {searchTerm || filterCategory !== 'all' || filterStatus !== 'all'
+                ? 'Không tìm thấy bài viết phù hợp' 
+                : 'Chưa có bài viết nào'
               }
             </h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || filterType !== 'all' || filterCategory !== 'all' || filterStatus !== 'all'
+              {searchTerm || filterCategory !== 'all' || filterStatus !== 'all'
                 ? 'Hãy thử điều chỉnh tìm kiếm hoặc bộ lọc của bạn' 
-                : 'Hãy upload media đầu tiên của bạn'
+                : 'Hãy tạo bài viết đầu tiên của bạn'
               }
             </p>
-            {!searchTerm && filterType === 'all' && filterCategory === 'all' && filterStatus === 'all' && (
+            {!searchTerm && filterCategory === 'all' && filterStatus === 'all' && (
               <Link
-                to="/media/upload"
+                to="/media/create"
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center"
               >
                 <Plus size={20} className="mr-2" />
-                Upload Media
+                Tạo bài viết mới
               </Link>
             )}
           </div>

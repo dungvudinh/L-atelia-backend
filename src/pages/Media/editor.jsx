@@ -1,14 +1,14 @@
 // components/MediaEditor.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Editor } from '@tinymce/tinymce-react';
 import { folderService } from '../../services/folderService';
 import { mediaService } from '../../services/mediaService';
 
 const MediaEditor = () => {
-  const { id } = useParams();
+  const { mediaId } = useParams();
   const navigate = useNavigate();
-  const isEditing = Boolean(id);
+  const isEditing = Boolean(mediaId);
   const editorRef = useRef(null);
   
   const [formData, setFormData] = useState({
@@ -29,12 +29,12 @@ const MediaEditor = () => {
     if (isEditing) {
       loadMedia();
     }
-  }, [id, isEditing]);
+  }, [mediaId, isEditing]);
 
   const loadMedia = async () => {
     try {
       setLoading(true);
-      const response = await mediaService.getMediaById(id);
+      const response = await mediaService.getMediaById(mediaId);
       setFormData({
         title: response.data.title,
         content: response.data.content,
@@ -69,28 +69,59 @@ const MediaEditor = () => {
 
   const handleImageUpload = async (file) => {
     setImageUploading(true);
-    setTimeout(() => {
-      const imageUrl = URL.createObjectURL(file);
+    try {
+      const formData = new FormData();
+      formData.append('featuredImage', file);
+
+      const response = await mediaService.uploadFeaturedImage(formData);
+      
+      // Lưu đường dẫn vào formData
       setFormData(prev => ({
         ...prev,
-        featuredImage: imageUrl
+        featuredImage: response.data.path // Lưu đường dẫn tương đối
       }));
+      
+    } catch (error) {
+      console.error('Error uploading featured image:', error);
+      alert('Không thể tải ảnh lên');
+    } finally {
       setImageUploading(false);
-    }, 1500);
+    }
   };
+  const handleDeleteFeaturedImage = async () => {
+    if (!formData.featuredImage) return;
 
+    try {
+      // Lấy filename từ đường dẫn
+      const filename = formData.featuredImage.split('/').pop();
+      
+      // Gọi API xóa file
+      await mediaService.deleteFeaturedImage(filename);
+      
+      // Xóa khỏi form data
+      setFormData(prev => ({
+        ...prev,
+        featuredImage: ''
+      }));
+      
+    } catch (error) {
+      console.error('Error deleting featured image:', error);
+      alert('Không thể xóa ảnh');
+    }
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      
       const submitData = {
         ...formData,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
       };
 
       if (isEditing) {
-        await mediaService.updateMedia(id, submitData);
+        await mediaService.updateMedia(mediaId, submitData);
       } else {
         await mediaService.createMedia(submitData);
       }
@@ -262,13 +293,14 @@ const MediaEditor = () => {
                 {formData.featuredImage ? (
                   <div className="space-y-3">
                     <img 
-                      src={formData.featuredImage} 
+                      src={getImageUrl(formData.featuredImage)} 
                       alt="Featured" 
                       className="w-full h-48 object-cover rounded-lg"
+                      crossOrigin="anonymous"
                     />
                     <button
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, featuredImage: '' }))}
+                      onClick={handleDeleteFeaturedImage}
                       className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
                     >
                       Xóa ảnh
@@ -328,7 +360,28 @@ const MediaEditor = () => {
     </>
   );
 };
-
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  
+  console.log('Original image path:', imagePath);
+  
+  // Nếu là URL đầy đủ (http/https) hoặc data URL
+  if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+    return imagePath;
+  }
+  
+  // Nếu là đường dẫn tương đối
+  const baseUrl = 'http://localhost:3000';
+  
+  // Xử lý đường dẫn Windows (có backslash)
+  const normalizedPath = imagePath.replace(/\\/g, '/');
+  
+  // Đảm bảo có slash ở giữa
+  let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+  
+  console.log('Final image URL:', finalUrl);
+  return finalUrl;
+};
 const MediaManager = ({ onClose, editorRef }) => {
   const [folders, setFolders] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
@@ -339,19 +392,12 @@ const MediaManager = ({ onClose, editorRef }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load folders khi component mount
-  useEffect(() => {
-    loadFolders();
-  }, []);
-
-  const loadFolders = async () => {
+  // Load folders với useCallback để tránh re-render không cần thiết
+  const loadFolders = useCallback(async () => {
     try {
       setLoading(true);
       const response = await folderService.getFolders();
-      
-      // Sửa lỗi: Xử lý response.data đúng cách
       const foldersData = response.data || [];
-      console.log('Folders data:', foldersData);
       
       setFolders(foldersData);
       
@@ -360,6 +406,9 @@ const MediaManager = ({ onClose, editorRef }) => {
         const firstFolder = foldersData[0];
         setCurrentFolder(firstFolder);
         await loadFolderImages(firstFolder._id);
+      } else {
+        setCurrentFolder(null);
+        setImages([]);
       }
     } catch (error) {
       console.error('Error loading folders:', error);
@@ -367,7 +416,11 @@ const MediaManager = ({ onClose, editorRef }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
 
   const loadFolderImages = async (folderId) => {
     try {
@@ -410,17 +463,20 @@ const MediaManager = ({ onClose, editorRef }) => {
 
     try {
       await folderService.deleteFolder(folderId);
-      setFolders(prev => prev.filter(folder => folder._id !== folderId));
       
-      // Nếu đang xem folder bị xóa, chuyển về folder đầu tiên
+      // CẬP NHẬT QUAN TRỌNG: Xử lý state update đúng cách
+      const updatedFolders = folders.filter(folder => folder._id !== folderId);
+      setFolders(updatedFolders);
+      
+      // Nếu đang xem folder bị xóa
       if (currentFolder && currentFolder._id === folderId) {
-        if (folders.length > 1) {
-          const newCurrentFolder = folders.find(folder => folder._id !== folderId);
-          if (newCurrentFolder) {
-            setCurrentFolder(newCurrentFolder);
-            await loadFolderImages(newCurrentFolder._id);
-          }
+        if (updatedFolders.length > 0) {
+          // Chuyển đến folder đầu tiên trong danh sách còn lại
+          const newCurrentFolder = updatedFolders[0];
+          setCurrentFolder(newCurrentFolder);
+          await loadFolderImages(newCurrentFolder._id);
         } else {
+          // Không còn folder nào
           setCurrentFolder(null);
           setImages([]);
         }
@@ -445,21 +501,20 @@ const MediaManager = ({ onClose, editorRef }) => {
     try {
       const formData = new FormData();
       files.forEach(file => {
-        formData.append('mediaFiles', file);
+        formData.append('images', file); // Sửa thành 'images' thay vì 'mediaFiles'
       });
 
       const response = await folderService.uploadImages(currentFolder._id, formData);
       
-      // Cập nhật danh sách ảnh
-      setImages(prev => [...prev, ...response.data]);
+      // Cập nhật state một lần duy nhất
+      const newImages = response.data;
+      setImages(prev => [...prev, ...newImages]);
       
-      // Cập nhật folder list với số lượng ảnh mới
       setFolders(prev => prev.map(folder => 
         folder._id === currentFolder._id 
           ? { 
               ...folder, 
-              images: [...(folder.images || []), ...response.data],
-              imageCount: (folder.images?.length || 0) + response.data.length
+              images: [...(folder.images || []), ...newImages]
             }
           : folder
       ));
@@ -483,16 +538,14 @@ const MediaManager = ({ onClose, editorRef }) => {
     try {
       await folderService.deleteImage(currentFolder._id, imageId);
       
-      // Cập nhật danh sách ảnh
+      // Cập nhật state một lần duy nhất
       setImages(prev => prev.filter(img => img._id !== imageId));
       
-      // Cập nhật folder list
       setFolders(prev => prev.map(folder => 
         folder._id === currentFolder._id 
           ? { 
               ...folder, 
-              images: folder.images?.filter(img => img._id !== imageId) || [],
-              imageCount: Math.max(0, (folder.imageCount || 0) - 1)
+              images: folder.images?.filter(img => img._id !== imageId) || []
             }
           : folder
       ));
@@ -506,11 +559,13 @@ const MediaManager = ({ onClose, editorRef }) => {
   const handleImageSelect = (image) => {
     if (editorRef.current) {
       const editor = editorRef.current;
+      const imageUrl = getImageUrl(image.url);
       
       // Chèn ảnh vào editor
       editor.execCommand('mceInsertContent', false, `
         <img 
-          src="${image.url}" 
+          src="${imageUrl}" 
+          crossOrigin="anonymous"
           alt="${image.originalName}" 
           style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;"
           data-image-id="${image._id}"
@@ -526,6 +581,71 @@ const MediaManager = ({ onClose, editorRef }) => {
   const handleFolderSelect = async (folder) => {
     setCurrentFolder(folder);
     await loadFolderImages(folder._id);
+  };
+
+  // Component Image với xử lý lỗi tốt hơn
+  const ImageItem = ({ image }) => {
+    const [imgError, setImgError] = useState(false);
+    const [imgLoading, setImgLoading] = useState(true);
+
+    const handleImageError = () => {
+      setImgError(true);
+      setImgLoading(false);
+    };
+
+    const handleImageLoad = () => {
+      setImgLoading(false);
+    };
+
+    return (
+      <div
+        onClick={() => handleImageSelect(image)}
+        className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all"
+      >
+        <div className="aspect-square bg-gray-100 relative">
+          {imgLoading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            </div>
+          )}
+          <img
+            src={imgError ? '/images/placeholder.jpg' : getImageUrl(image.url)}
+            alt={image.originalName}
+            crossOrigin="anonymous"
+            className="w-full h-full object-cover"
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+            style={{ display: imgLoading ? 'none' : 'block' }}
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <button className="bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <button
+          onClick={(e) => handleDeleteImage(image._id, e)}
+          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div className="p-2">
+          <p className="text-xs font-medium text-gray-900 truncate mb-1">
+            {image.originalName}
+          </p>
+          <p className="text-xs text-gray-500">
+            {image.size ? `${(image.size / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -644,7 +764,7 @@ const MediaManager = ({ onClose, editorRef }) => {
                       
                       <div className="flex items-center gap-2">
                         <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                          {folder.images?.length || folder.imageCount || 0}
+                          {folder.images?.length || 0}
                         </span>
                         
                         <button
@@ -698,52 +818,10 @@ const MediaManager = ({ onClose, editorRef }) => {
                   </div>
                 )}
 
-                {/* Images Grid */}
+                {/* Images Grid - Sử dụng ImageItem component mới */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {images.map(image => (
-                    <div
-                      key={image._id}
-                      onClick={() => handleImageSelect(image)}
-                      className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all"
-                    >
-                      <div className="aspect-square bg-gray-100 relative">
-                        <img
-                          src={image.url}
-                          alt={image.originalName}
-                          crossOrigin="anonymous"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.src = '/images/placeholder.jpg';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <button className="bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={(e) => handleDeleteImage(image._id, e)}
-                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-
-                      <div className="p-2">
-                        <p className="text-xs font-medium text-gray-900 truncate mb-1">
-                          {image.originalName}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {image.size ? `${(image.size / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}
-                        </p>
-                      </div>
-                    </div>
+                    <ImageItem key={image._id} image={image} />
                   ))}
                 </div>
 

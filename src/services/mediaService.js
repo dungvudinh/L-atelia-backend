@@ -1,4 +1,3 @@
-// services/mediaService.js
 import axiosClient from "../configs/axios";
 
 export const mediaService = {
@@ -32,7 +31,7 @@ export const mediaService = {
     }
   },
 
-  // Create media (không dùng FormData nữa)
+  // Create media
   createMedia: async (mediaData) => {
     try {
       console.log('🔄 Creating media:', mediaData);
@@ -47,7 +46,7 @@ export const mediaService = {
     }
   },
 
-  // Update media (không dùng FormData nữa)
+  // Update media
   updateMedia: async (id, mediaData) => {
     try {
       console.log(`🔄 Updating media with ID: ${id}`);
@@ -88,6 +87,40 @@ export const mediaService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error in bulkDeleteMedia service:', error);
+      throw error;
+    }
+  },
+
+  // Upload featured image
+  uploadFeaturedImage: async (formData) => {
+    try {
+      console.log('🖼️ Uploading featured image');
+      
+      const response = await axiosClient.post('/v1/media/upload-featured-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      console.log('✅ Featured image uploaded successfully');
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in uploadFeaturedImage service:', error);
+      throw error;
+    }
+  },
+
+  // Delete featured image
+  deleteFeaturedImage: async (filename) => {
+    try {
+      console.log(`🗑️ Deleting featured image: ${filename}`);
+      
+      const response = await axiosClient.delete(`/v1/media/delete-featured-image/${filename}`);
+      console.log('✅ Featured image deleted successfully');
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in deleteFeaturedImage service:', error);
       throw error;
     }
   },

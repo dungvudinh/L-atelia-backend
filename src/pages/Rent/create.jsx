@@ -1,14 +1,11 @@
 // components/RentEditor.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Editor } from '@tinymce/tinymce-react';
-// import MediaManager from './MediaManager';
 
 const RentEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(id);
-  const editorRef = useRef(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -18,8 +15,31 @@ const RentEditor = () => {
     beds: '',
     bedrooms: '',
     bathrooms: '',
-    description: '',
-    features: [],
+    description: '', // Nội dung đầy đủ (Show More)
+    descriptionShort: '', // Nội dung tóm tắt
+    highlights: [
+      {
+        id: 1,
+        title: 'Outdoor entertainment',
+        description: 'The alfresco dining and outdoor seating are great for summer trips.',
+        icon: 'calendar',
+        isDefault: true
+      },
+      {
+        id: 2,
+        title: 'Room in a rental unit',
+        description: 'Your own room in a home, plus access to shared spaces.',
+        icon: 'home',
+        isDefault: true
+      },
+      {
+        id: 3,
+        title: 'Free cancellation for 24 hours',
+        description: 'Get a full refund if you change your mind.',
+        icon: 'shield',
+        isDefault: true
+      }
+    ],
     amenities: [],
     contactInfo: {
       phone: '',
@@ -34,11 +54,10 @@ const RentEditor = () => {
 
   const [loading, setLoading] = useState(false);
   const [showMediaManager, setShowMediaManager] = useState(false);
-  const [newFeature, setNewFeature] = useState('');
-  const [newAmenity, setNewAmenity] = useState('');
+  const [newHighlight, setNewHighlight] = useState({ title: '', description: '' });
+  const [editingHighlight, setEditingHighlight] = useState(null);
   const [imageUploading, setImageUploading] = useState(false);
-
-//   const tinymceApiKey = process.env.REACT_APP_TINYMCE_API_KEY;
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   const amenitiesOptions = [
     'Safety room',
@@ -55,6 +74,30 @@ const RentEditor = () => {
     'TV'
   ];
 
+  // Icon mapping
+  const iconComponents = {
+    calendar: (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+    home: (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+    shield: (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+      </svg>
+    ),
+    star: (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+      </svg>
+    )
+  };
+
   useEffect(() => {
     if (isEditing) {
       const mockData = {
@@ -65,11 +108,37 @@ const RentEditor = () => {
         beds: '2',
         bedrooms: '1',
         bathrooms: '1',
-        description: 'Luxury villa with panoramic views of the sea and mountains. Perfect for romantic getaways and family vacations.',
-        features: [
-          'Ocean restructuring - The villa\'s work has a shallow working area given for numerous trips',
-          'Room in a rental area - Not mentioned by Dr.Davies, plus current to Owner classes',
-          'Free consultation for all hours - Get a full refund 2 days charging your arrival'
+        description: 'Luxury villa with panoramic views of the sea and mountains. Perfect for romantic getaways and family vacations.\n\nThis stunning property features:\n• Private infinity pool\n• Spacious living areas\n• Modern kitchen with high-end appliances\n• Luxurious bedrooms with en-suite bathrooms\n• Beautiful garden and outdoor dining area\n\nLocated in a peaceful neighborhood with easy access to beaches, restaurants, and shopping centers.',
+        descriptionShort: 'Luxury villa with panoramic sea and mountain views. Perfect for romantic getaways and family vacations. Private infinity pool and modern amenities.',
+        highlights: [
+          {
+            id: 1,
+            title: 'Outdoor entertainment',
+            description: 'The alfresco dining and outdoor seating are great for summer trips.',
+            icon: 'calendar',
+            isDefault: true
+          },
+          {
+            id: 2,
+            title: 'Room in a rental unit',
+            description: 'Your own room in a home, plus access to shared spaces.',
+            icon: 'home',
+            isDefault: true
+          },
+          {
+            id: 3,
+            title: 'Free cancellation for 24 hours',
+            description: 'Get a full refund if you change your mind.',
+            icon: 'shield',
+            isDefault: true
+          },
+          {
+            id: 4,
+            title: 'Ocean View',
+            description: 'Stunning panoramic views of the ocean from every room.',
+            icon: 'star',
+            isDefault: false
+          }
         ],
         amenities: ['Safety room', 'Safety unit location', 'Air conditioning', 'Parking', 'Restaurants'],
         contactInfo: {
@@ -109,27 +178,67 @@ const RentEditor = () => {
     }));
   };
 
-  const handleEditorChange = (content) => {
+  const handleDescriptionChange = (e) => {
     setFormData(prev => ({
       ...prev,
-      description: content
+      description: e.target.value
     }));
   };
 
-  const addFeature = () => {
-    if (newFeature.trim()) {
+  const handleShortDescriptionChange = (e) => {
+    setFormData(prev => ({
+      ...prev,
+      descriptionShort: e.target.value
+    }));
+  };
+
+  // Các hàm xử lý highlight giữ nguyên
+  const startEditingHighlight = (highlight) => {
+    setEditingHighlight(highlight);
+    setNewHighlight({ title: highlight.title, description: highlight.description });
+  };
+
+  const cancelEditingHighlight = () => {
+    setEditingHighlight(null);
+    setNewHighlight({ title: '', description: '' });
+  };
+
+  const updateHighlight = () => {
+    if (newHighlight.title.trim() && newHighlight.description.trim()) {
       setFormData(prev => ({
         ...prev,
-        features: [...prev.features, newFeature.trim()]
+        highlights: prev.highlights.map(h => 
+          h.id === editingHighlight.id 
+            ? { ...h, title: newHighlight.title.trim(), description: newHighlight.description.trim() }
+            : h
+        )
       }));
-      setNewFeature('');
+      cancelEditingHighlight();
     }
   };
 
-  const removeFeature = (index) => {
+  const addHighlight = () => {
+    if (newHighlight.title.trim() && newHighlight.description.trim()) {
+      const newHighlightItem = {
+        id: Date.now(),
+        title: newHighlight.title.trim(),
+        description: newHighlight.description.trim(),
+        icon: 'star',
+        isDefault: false
+      };
+
+      setFormData(prev => ({
+        ...prev,
+        highlights: [...prev.highlights, newHighlightItem]
+      }));
+      setNewHighlight({ title: '', description: '' });
+    }
+  };
+
+  const removeHighlight = (highlightId) => {
     setFormData(prev => ({
       ...prev,
-      features: prev.features.filter((_, i) => i !== index)
+      highlights: prev.highlights.filter(h => !(h.id === highlightId && h.isDefault))
     }));
   };
 
@@ -142,7 +251,7 @@ const RentEditor = () => {
     }));
   };
 
-  // Xử lý upload ảnh
+  // Các hàm xử lý ảnh giữ nguyên
   const handleImageUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
@@ -155,7 +264,7 @@ const RentEditor = () => {
         id: Date.now() + Math.random(),
         url: URL.createObjectURL(file),
         name: file.name,
-        isFeatured: formData.gallery.length === 0 // Nếu gallery rỗng, ảnh đầu tiên làm featured
+        isFeatured: formData.gallery.length === 0
       };
 
       newImages.push(newImage);
@@ -164,7 +273,6 @@ const RentEditor = () => {
 
     setFormData(prev => {
       const updatedGallery = [...prev.gallery, ...newImages];
-      // Nếu chưa có featured image, set ảnh đầu tiên làm featured
       const featuredImage = prev.featuredImage || (updatedGallery.length > 0 ? updatedGallery[0].url : '');
       
       return {
@@ -178,7 +286,6 @@ const RentEditor = () => {
     event.target.value = '';
   };
 
-  // Chọn ảnh làm featured
   const setAsFeatured = (imageUrl) => {
     setFormData(prev => ({
       ...prev,
@@ -190,7 +297,6 @@ const RentEditor = () => {
     }));
   };
 
-  // Xóa ảnh khỏi gallery
   const removeImage = (imageId) => {
     setFormData(prev => {
       const updatedGallery = prev.gallery.filter(img => img.id !== imageId);
@@ -204,7 +310,6 @@ const RentEditor = () => {
     });
   };
 
-  // Sắp xếp gallery: featured image lên đầu
   const sortedGallery = [...formData.gallery].sort((a, b) => {
     if (a.isFeatured) return -1;
     if (b.isFeatured) return 1;
@@ -220,6 +325,44 @@ const RentEditor = () => {
       setLoading(false);
       navigate('/rent');
     }, 2000);
+  };
+
+  // Hàm render preview - xử lý xuống dòng
+  const renderDescriptionPreview = () => {
+    if (!formData.descriptionShort && !formData.description) {
+      return <p className="text-gray-500 italic">No description available</p>;
+    }
+
+    if (!showFullDescription) {
+      return (
+        <div>
+          <p className="text-gray-700 mb-3 whitespace-pre-line">{formData.descriptionShort}</p>
+          {formData.description && (
+            <button
+              type="button"
+              onClick={() => setShowFullDescription(true)}
+              className="text-blue-600 hover:text-blue-800 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+            >
+              Show More
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <p className="text-gray-700 mb-3 whitespace-pre-line">{formData.descriptionShort}</p>
+        <p className="text-gray-700 mb-3 whitespace-pre-line">{formData.description}</p>
+        <button
+          type="button"
+          onClick={() => setShowFullDescription(false)}
+          className="text-blue-600 hover:text-blue-800 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+        >
+          Show Less
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -243,7 +386,7 @@ const RentEditor = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Basic Information */}
+        {/* Basic Information - Giữ nguyên */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
           
@@ -350,7 +493,7 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Image Gallery */}
+        {/* Image Gallery - Giữ nguyên */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Property Images</h2>
           
@@ -517,66 +660,188 @@ const RentEditor = () => {
           )}
         </div>
 
-        {/* Description */}
+        {/* Description với textarea */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Description</h2>
-          <Editor
-            apiKey={'e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez'}
-            onInit={(evt, editor) => editorRef.current = editor}
-            value={formData.description}
-            onEditorChange={handleEditorChange}
-            init={{
-              height: 300,
-              menubar: false,
-              plugins: ['advlist', 'autolink', 'lists', 'link', 'charmap', 'preview', 'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen', 'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'],
-              toolbar: 'undo redo | blocks | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link | code',
-              content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
-            }}
-          />
-        </div>
-
-        {/* Features */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Features & Showroom</h2>
           
-          <div className="space-y-4">
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={newFeature}
-                onChange={(e) => setNewFeature(e.target.value)}
-                placeholder="Add a feature (e.g., Ocean restructuring)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={addFeature}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Add
-              </button>
+          {/* Short Description (Summary) */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Short Description (Summary) *
+              <span className="text-xs text-gray-500 ml-2">
+                This will be shown initially to users
+              </span>
+            </label>
+            <textarea
+              value={formData.descriptionShort}
+              onChange={handleShortDescriptionChange}
+              required
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Brief description that will be shown initially to users..."
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              This is the preview text that users will see first
             </div>
+          </div>
 
-            <div className="space-y-2">
-              {formData.features.map((feature, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-700">{feature}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFeature(index)}
-                    className="text-red-600 hover:text-red-800 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
+          {/* Full Description (Show More Content) */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Full Description (Show More Content) *
+              <span className="text-xs text-gray-500 ml-2">
+                This will be shown when users click "Show More"
+              </span>
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={handleDescriptionChange}
+              required
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Detailed description that will be shown when users click 'Show More'..."
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Detailed description that appears when users click "Show More"
+            </div>
+          </div>
+
+          {/* Preview Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Preview</h3>
+            <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-3">How it will appear to users:</h4>
+              <div className="bg-white p-4 rounded border">
+                {renderDescriptionPreview()}
+              </div>
+              <div className="mt-3 text-xs text-gray-500">
+                <p>• Short description is always visible</p>
+                <p>• "Show More" button appears when full description is available</p>
+                <p>• Users can toggle between short and full view</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Amenities */}
+        {/* Highlights - Giữ nguyên */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Highlights</h2>
+          
+          {/* Default Highlights */}
+          <div className="space-y-4 mb-6">
+            {formData.highlights.map((highlight) => (
+              <div key={highlight.id} className="flex items-start space-x-3 p-4 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  {iconComponents[highlight.icon]}
+                </div>
+                <div className="flex-1">
+                  {editingHighlight?.id === highlight.id ? (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={newHighlight.title}
+                        onChange={(e) => setNewHighlight(prev => ({ ...prev, title: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Highlight title"
+                      />
+                      <textarea
+                        value={newHighlight.description}
+                        onChange={(e) => setNewHighlight(prev => ({ ...prev, description: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Highlight description"
+                        rows="2"
+                      />
+                      <div className="flex space-x-2">
+                        <button
+                          type="button"
+                          onClick={updateHighlight}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditingHighlight}
+                          className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{highlight.title}</h3>
+                          <p className="text-sm text-gray-600 mt-1">{highlight.description}</p>
+                        </div>
+                        <div className="flex space-x-2 ml-4">
+                          <button
+                            type="button"
+                            onClick={() => startEditingHighlight(highlight)}
+                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                            title="Edit highlight"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {!highlight.isDefault && (
+                            <button
+                              type="button"
+                              onClick={() => removeHighlight(highlight.id)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                              title="Remove highlight"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {highlight.isDefault && (
+                        <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                          Default
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add New Highlight */}
+          <div className="pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Highlight</h3>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={newHighlight.title}
+                onChange={(e) => setNewHighlight(prev => ({ ...prev, title: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter highlight title (e.g., Ocean View)"
+              />
+              <textarea
+                value={newHighlight.description}
+                onChange={(e) => setNewHighlight(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter highlight description"
+                rows="2"
+              />
+              <button
+                type="button"
+                onClick={addHighlight}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Add New Highlight
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Amenities - Giữ nguyên */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Amenities</h2>
           
@@ -595,8 +860,8 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Contact Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        {/* Contact Information - Giữ nguyên */}
+        {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Contact Information</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -642,9 +907,9 @@ const RentEditor = () => {
               />
             </div>
           </div>
-        </div>
+        </div> */}
 
-        {/* Status & Featured */}
+        {/* Status & Featured - Giữ nguyên */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Settings</h2>
           
@@ -680,7 +945,7 @@ const RentEditor = () => {
           </div>
         </div>
 
-        {/* Submit Buttons */}
+        {/* Submit Buttons - Giữ nguyên */}
         <div className="flex justify-end space-x-4">
           <button
             type="button"
