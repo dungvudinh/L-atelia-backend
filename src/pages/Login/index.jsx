@@ -10,14 +10,25 @@ const Login = () => {
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-
-  // Redirect if already logged in
+  // Load saved credentials khi component mount
   useEffect(() => {
     if (authService.isAuthenticated()) {
       navigate('/');
+      return;
+    }
+
+    // Load saved credentials từ localStorage
+    const savedCredentials = authService.getSavedCredentials();
+    if (savedCredentials) {
+      setFormData({
+        username: savedCredentials.username,
+        password: '' // Không tự động điền password vì lý do bảo mật
+      });
+      setRememberMe(true);
     }
   }, [navigate]);
 
@@ -31,27 +42,43 @@ const Login = () => {
     if (error) setError('');
   };
 
+  const handleRememberMeChange = (e) => {
+    setRememberMe(e.target.checked);
+  };
+
+  // src/pages/Login.jsx - Cập nhật handleSubmit
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+    e.preventDefault()
+    setLoading(true)
+    setError('')
 
     try {
-      const result = await authService.login(formData.username, formData.password);
+      console.log('🔐 Login Component - Starting login process...')
+      
+      const result = await authService.login(formData.username, formData.password)
+      console.log('✅ Login Component - Login successful:', result)
       
       if (result.success) {
         // Store user data
-        authService.storeUserData(result.data.token, result.data.user);
+        authService.storeUserData(result.data.token, result.data.user)
         
         // Redirect to admin dashboard
-        navigate('/admin');
+        navigate('/')
       }
     } catch (error) {
-      setError(error.message || 'Login failed. Please try again.');
+      console.log('❌ Login Component - Catch block error:', {
+        message: error.message,
+        name: error.name,
+        constructor: error.constructor.name,
+        isError: error instanceof Error
+      })
+      
+      // Hiển thị lỗi cho user
+      setError(error.message || 'Login failed. Please try again.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -125,6 +152,8 @@ const Login = () => {
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={handleRememberMeChange}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="ml-2 text-sm text-gray-600">Remember me</span>
@@ -165,6 +194,13 @@ const Login = () => {
               <p><strong>Username:</strong> admin</p>
               <p><strong>Password:</strong> 123456a@</p>
             </div>
+            {rememberMe && formData.username && (
+              <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
+                <p className="text-xs text-blue-700">
+                  <strong>Note:</strong> Username will be remembered
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

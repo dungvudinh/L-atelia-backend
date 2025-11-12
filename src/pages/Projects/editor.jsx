@@ -5,6 +5,34 @@ import { Upload, X, Plus, Trash2, FileText } from 'lucide-react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { projectService } from '../../services/projectService';
 
+// Hàm tạo special sections mặc định - ĐẶT NGOÀI COMPONENT
+const getDefaultSpecialSections = () => [
+  {
+    id: 'spectacular-architecture',
+    type: 'architecture',
+    title: 'SPECTACULAR ARCHITECTURE',
+    shortDescription: 'Designed by Parisian architects in the late 19th century this property exudes french charm with an air of grandeur and opulence rarely seen anywhere else on the island.',
+    fullDescription: 'Designed by Parisian architects in the late 19th century this property exudes french charm with an air of grandeur and opulence rarely seen anywhere else on the island. The intricate details and craftsmanship showcase the exceptional architectural heritage of this magnificent building.',
+    isExpandable: true
+  },
+  {
+    id: 'the-history',
+    type: 'history',
+    title: 'THE HISTORY',
+    shortDescription: 'When scientists discovered the health benefits of vitamin C in the late 18th century Sóller\'s citrus trade boomed and the town saw a massive influx of wealth.',
+    fullDescription: 'When scientists discovered the health benefits of vitamin C in the late 18th century Sóller\'s citrus trade boomed and the town saw a massive influx of wealth. It was during this time of opulence in 1896 that this townhouse was built. Parisian architects were hired and materials such as stained glass and wood were shipped in from all over the world.',
+    isExpandable: true
+  },
+  {
+    id: 'immataculate-details',
+    type: 'details',
+    title: 'IMMATECULATE DETAILS',
+    shortDescription: 'The extensive reformation saw all the historic sections painstakingly restored to their original glory while adding modern comforts and luxuries throughout.',
+    fullDescription: 'The extensive reformation saw all the historic sections painstakingly restored to their original glory while adding modern comforts and luxuries throughout. Every detail was carefully considered to maintain the historical integrity while providing contemporary living standards.',
+    isExpandable: true
+  }
+];
+
 export default function Editor() {
   
   const navigate = useNavigate();
@@ -13,6 +41,7 @@ export default function Editor() {
   const isEditMode = !!projectId;
   const [loading, setLoading] = useState(false);
 
+  // State với special sections mặc định
   const [project, setProject] = useState({
     title: '',
     description: '',
@@ -20,44 +49,41 @@ export default function Editor() {
     location: '',
     heroImage: '',
     gallery: [],
-    details: { area: '', bedrooms: '', bathrooms: '', floors: '', style: '', year: '', location: '' },
-    floorPlans: [],
+    propertyFeatures: [],
+    specifications: [],
     constructionProgress: [],
     designImages: [],
-    brochure: [], // CHANGED: từ string thành array
-    featureSections: []
+    brochure: [],
+    propertyHighlights: [],
+    specialSections: getDefaultSpecialSections() // THÊM DỮ LIỆU MẶC ĐỊNH NGAY TỪ ĐẦU
   });
-
   // Preview states
   const [galleryPreview, setGalleryPreview] = useState([]);
-  const [floorPlanPreview, setFloorPlanPreview] = useState([]);
   const [progressPreview, setProgressPreview] = useState([]);
   const [designPreview, setDesignPreview] = useState([]);
-  const [brochurePreview, setBrochurePreview] = useState([]); // CHANGED: từ object thành array
+  const [brochurePreview, setBrochurePreview] = useState([]);
 
   // Store actual File objects for upload
   const [fileObjects, setFileObjects] = useState({
     heroImage: null,
     gallery: [],
-    floorPlans: [],
     constructionProgress: [],
     designImages: [],
-    brochure: [] // CHANGED: từ null thành array
+    brochure: []
   });
 
   useEffect(() => {
     if (projectId) loadProject(projectId);
   }, [projectId]);
-  // Trong Editor component
+
   const loadProject = async (id) => {
     try {
       setLoading(true);
       const res = await projectService.getProjectById(id);
       const p = res.data;
+      console.log("P", p)
       
-      console.log('Loaded project data:', p);
-      
-      // Set basic project data
+      // Set basic project data với cấu trúc mới
       setProject({
         title: p.title || '',
         description: p.description || '',
@@ -65,17 +91,17 @@ export default function Editor() {
         location: p.location || '',
         heroImage: p.heroImage || '',
         gallery: p.gallery || [],
-        details: p.details || { area: '', bedrooms: '', bathrooms: '', floors: '', style: '', year: '', location: '' },
-        floorPlans: p.floorPlans || [],
+        propertyFeatures: p.propertyFeatures || [],
+        specifications: p.specifications || [],
         constructionProgress: p.constructionProgress || [],
         designImages: p.designImages || [],
         brochure: p.brochure || [],
-        featureSections: p.featureSections || []
+        propertyHighlights: p.propertyHighlights || [],
+        specialSections: p.specialSections.length > 0 ? p.specialSections:  getDefaultSpecialSections() // ĐẢM BẢO LUÔN CÓ DỮ LIỆU
       });
 
       // Set previews với existing images
       setGalleryPreview(p.gallery || []);
-      setFloorPlanPreview(p.floorPlans || []);
       setProgressPreview(p.constructionProgress || []);
       setDesignPreview(p.designImages || []);
       
@@ -89,7 +115,6 @@ export default function Editor() {
           }));
           setBrochurePreview(brochurePreviews);
         } else {
-          // Fallback cho dữ liệu cũ (string)
           setBrochurePreview([{
             url: p.brochure,
             name: 'brochure.pdf',
@@ -98,11 +123,10 @@ export default function Editor() {
         }
       }
       
-      // Reset file objects (vì đây là edit mode, files đã tồn tại trên server)
+      // Reset file objects
       setFileObjects({
         heroImage: null,
         gallery: [],
-        floorPlans: [],
         constructionProgress: [],
         designImages: [],
         brochure: []
@@ -130,7 +154,7 @@ export default function Editor() {
     }
   };
 
-  // Handle image upload - store both preview URL and File object
+  // Handle image upload
   const handleImageUpload = (e, type) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -148,15 +172,7 @@ export default function Editor() {
         setGalleryPreview(p => [...p, url]);
         setFileObjects(prev => ({ ...prev, gallery: [...prev.gallery, file] }));
       });
-    } 
-    else if (type === 'floorplan') {
-      files.forEach(file => {
-        const url = URL.createObjectURL(file);
-        setProject(p => ({ ...p, floorPlans: [...p.floorPlans, url] }));
-        setFloorPlanPreview(p => [...p, url]);
-        setFileObjects(prev => ({ ...prev, floorPlans: [...prev.floorPlans, file] }));
-      });
-    } 
+    }
     else if (type === 'progress') {
       files.forEach(file => {
         const url = URL.createObjectURL(file);
@@ -174,7 +190,6 @@ export default function Editor() {
       });
     } 
     else if (type === 'brochure') {
-      // CHANGED: Xử lý multiple files cho brochure
       files.forEach(file => {
         const url = URL.createObjectURL(file);
         const brochureItem = {
@@ -188,7 +203,6 @@ export default function Editor() {
       });
     }
 
-    // Reset file input
     e.target.value = '';
   };
 
@@ -197,129 +211,221 @@ export default function Editor() {
     if (type === 'hero') {
       setProject(p => ({ ...p, heroImage: '' }));
       setFileObjects(prev => ({ ...prev, heroImage: null }));
-    } else if (type === 'gallery') {
-      const newGallery = project.gallery.filter((_, i) => i !== index);
-      const newPreview = galleryPreview.filter((_, i) => i !== index);
-      const newFiles = fileObjects.gallery.filter((_, i) => i !== index);
+    } else {
+      const typeMap = {
+        gallery: ['gallery', galleryPreview, 'gallery'],
+        progress: ['constructionProgress', progressPreview, 'constructionProgress'],
+        design: ['designImages', designPreview, 'designImages'],
+        brochure: ['brochure', brochurePreview, 'brochure']
+      };
+
+      const [projectKey, previewState, fileKey] = typeMap[type];
       
-      setProject(p => ({ ...p, gallery: newGallery }));
-      setGalleryPreview(newPreview);
-      setFileObjects(prev => ({ ...prev, gallery: newFiles }));
-    } else if (type === 'floorplan') {
-      const newPlans = project.floorPlans.filter((_, i) => i !== index);
-      const newPreview = floorPlanPreview.filter((_, i) => i !== index);
-      const newFiles = fileObjects.floorPlans.filter((_, i) => i !== index);
+      const newProjectArray = project[projectKey].filter((_, i) => i !== index);
+      const newPreview = previewState.filter((_, i) => i !== index);
+      const newFiles = fileObjects[fileKey].filter((_, i) => i !== index);
       
-      setProject(p => ({ ...p, floorPlans: newPlans }));
-      setFloorPlanPreview(newPreview);
-      setFileObjects(prev => ({ ...prev, floorPlans: newFiles }));
-    } else if (type === 'progress') {
-      const newArr = project.constructionProgress.filter((_, i) => i !== index);
-      const newPrev = progressPreview.filter((_, i) => i !== index);
-      const newFiles = fileObjects.constructionProgress.filter((_, i) => i !== index);
+      setProject(p => ({ ...p, [projectKey]: newProjectArray }));
+      if (type === 'gallery') setGalleryPreview(newPreview);
+      if (type === 'progress') setProgressPreview(newPreview);
+      if (type === 'design') setDesignPreview(newPreview);
+      if (type === 'brochure') setBrochurePreview(newPreview);
       
-      setProject(p => ({ ...p, constructionProgress: newArr }));
-      setProgressPreview(newPrev);
-      setFileObjects(prev => ({ ...prev, constructionProgress: newFiles }));
-    } else if (type === 'design') {
-      const newArr = project.designImages.filter((_, i) => i !== index);
-      const newPrev = designPreview.filter((_, i) => i !== index);
-      const newFiles = fileObjects.designImages.filter((_, i) => i !== index);
-      
-      setProject(p => ({ ...p, designImages: newArr }));
-      setDesignPreview(newPrev);
-      setFileObjects(prev => ({ ...prev, designImages: newFiles }));
-    } else if (type === 'brochure') {
-      // CHANGED: Xử lý xóa brochure theo index
-      const newBrochure = project.brochure.filter((_, i) => i !== index);
-      const newPreview = brochurePreview.filter((_, i) => i !== index);
-      const newFiles = fileObjects.brochure.filter((_, i) => i !== index);
-      
-      setProject(p => ({ ...p, brochure: newBrochure }));
-      setBrochurePreview(newPreview);
-      setFileObjects(prev => ({ ...prev, brochure: newFiles }));
+      setFileObjects(prev => ({ ...prev, [fileKey]: newFiles }));
     }
   };
 
-  // Feature Section Functions (giữ nguyên)
-  const updateFeatureSection = (id, field, value) => {
-    setProject(prev => ({
-      ...prev,
-      featureSections: prev.featureSections.map(sec =>
-        sec.id === id ? { ...sec, [field]: value } : sec
-      )
-    }));
-  };
-
-  const toggleExpandable = (id) => {
-    setProject(prev => ({
-      ...prev,
-      featureSections: prev.featureSections.map(sec =>
-        sec.id === id ? { ...sec, isExpandable: !sec.isExpandable } : sec
-      )
-    }));
-  };
-
-  const addFeatureSection = () => {
-    const newSection = {
-      id: `custom-${Date.now()}`,
-      title: 'Tiêu đề tính năng',
-      shortDescription: 'Mô tả ngắn...',
-      fullDescription: 'Mô tả đầy đủ...',
-      isExpandable: true
+  // Property Features Functions
+  const addPropertyFeature = () => {
+    const newFeature = {
+      id: `feature-${Date.now()}`,
+      text: ''
     };
-    setProject(prev => ({ 
-      ...prev, 
-      featureSections: [...prev.featureSections, newSection] 
+    setProject(prev => ({
+      ...prev,
+      propertyFeatures: [...prev.propertyFeatures, newFeature]
     }));
   };
 
-  const removeFeatureSection = (id) => {
-    setProject(prev => ({ 
-      ...prev, 
-      featureSections: prev.featureSections.filter(sec => sec.id !== id) 
+  const updatePropertyFeature = (id, text) => {
+    setProject(prev => ({
+      ...prev,
+      propertyFeatures: prev.propertyFeatures.map(feature =>
+        feature.id === id ? { ...feature, text } : feature
+      )
     }));
   };
 
+  const removePropertyFeature = (id) => {
+    setProject(prev => ({
+      ...prev,
+      propertyFeatures: prev.propertyFeatures.filter(feature => feature.id !== id)
+    }));
+  };
+
+  // Specification Functions
+  const addSpecification = () => {
+    const newSpec = {
+      id: `spec-${Date.now()}`,
+      text: ''
+    };
+    setProject(prev => ({
+      ...prev,
+      specifications: [...prev.specifications, newSpec]
+    }));
+  };
+
+  const updateSpecification = (id, text) => {
+    setProject(prev => ({
+      ...prev,
+      specifications: prev.specifications.map(spec =>
+        spec.id === id ? { ...spec, text } : spec
+      )
+    }));
+  };
+
+  const removeSpecification = (id) => {
+    setProject(prev => ({
+      ...prev,
+      specifications: prev.specifications.filter(spec => spec.id !== id)
+    }));
+  };
+
+  // Property Highlights Functions
+  const addPropertyHighlight = () => {
+    const newHighlight = {
+      id: `highlight-${Date.now()}`,
+      title: '',
+      description: '',
+      featureSections: []
+    };
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: [...prev.propertyHighlights, newHighlight]
+    }));
+  };
+
+  const updatePropertyHighlight = (id, field, value) => {
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: prev.propertyHighlights.map(highlight =>
+        highlight.id === id ? { ...highlight, [field]: value } : highlight
+      )
+    }));
+  };
+
+  const removePropertyHighlight = (id) => {
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: prev.propertyHighlights.filter(highlight => highlight.id !== id)
+    }));
+  };
+
+  // Feature Section Functions (trong Property Highlight)
+  const addFeatureSection = (highlightId) => {
+    const newSection = {
+      id: `section-${Date.now()}`,
+      name: '',
+      description: ''
+    };
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: prev.propertyHighlights.map(highlight =>
+        highlight.id === highlightId
+          ? { ...highlight, featureSections: [...highlight.featureSections, newSection] }
+          : highlight
+      )
+    }));
+  };
+
+  const updateFeatureSection = (highlightId, sectionId, field, value) => {
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: prev.propertyHighlights.map(highlight =>
+        highlight.id === highlightId
+          ? {
+              ...highlight,
+              featureSections: highlight.featureSections.map(section =>
+                section._id === sectionId ? { ...section, [field]: value } : section
+              )
+            }
+          : highlight
+      )
+    }));
+  };
+
+  const removeFeatureSection = (highlightId, sectionId) => {
+    setProject(prev => ({
+      ...prev,
+      propertyHighlights: prev.propertyHighlights.map(highlight =>
+        highlight.id === highlightId
+          ? {
+              ...highlight,
+              featureSections: highlight.featureSections.filter(section => section._id !== sectionId)
+            }
+          : highlight
+      )
+    }));
+  };
+
+  // Special Sections Functions
+  const updateSpecialSection = (id, field, value) => {
+    console.log(`Updating special section ${id}, field: ${field}, value:`, value);
+    setProject(prev => ({
+      ...prev,
+      specialSections: prev.specialSections.map(section =>
+        section._id === id ? { ...section, [field]: value } : section
+      )
+    }));
+  };
+
+  const toggleSpecialSectionExpandable = (id) => {
+    console.log(`Toggling expandable for section ${id}`);
+    setProject(prev => ({
+      ...prev,
+      specialSections: prev.specialSections.map(section =>
+        section._id === id ? { ...section, isExpandable: !section.isExpandable } : section
+      )
+    }));
+  };
   // Prepare form data for API call
   const prepareFormData = () => {
     try {
       const formData = new FormData();
       
-      // Prepare text data
+      // Prepare text data với cấu trúc mới
       const textData = {
         title: project.title,
         description: project.description,
         status: project.status,
         location: project.location,
-        details: project.details,
-        featureSections: project.featureSections
+        propertyFeatures: project.propertyFeatures,
+        specifications: project.specifications,
+        propertyHighlights: project.propertyHighlights,
+        specialSections: project.specialSections
       };
       
+      console.log('Text data for form:', textData);
       formData.append('data', JSON.stringify(textData));
       
-      // Append files - kiểm tra từng file
+      // Append files
       if (fileObjects.heroImage) {
         formData.append('heroImage', fileObjects.heroImage);
       }
       
-      fileObjects.gallery.forEach((file, index) => {
+      fileObjects.gallery.forEach((file) => {
         if (file) formData.append('gallery', file);
       });
       
-      fileObjects.floorPlans.forEach((file, index) => {
-        if (file) formData.append('floorPlans', file);
-      });
-      
-      fileObjects.constructionProgress.forEach((file, index) => {
+      fileObjects.constructionProgress.forEach((file) => {
         if (file) formData.append('constructionProgress', file);
       });
       
-      fileObjects.designImages.forEach((file, index) => {
+      fileObjects.designImages.forEach((file) => {
         if (file) formData.append('designImages', file);
       });
       
-      fileObjects.brochure.forEach((file, index) => {
+      fileObjects.brochure.forEach((file) => {
         if (file) formData.append('brochure', file);
       });
       
@@ -327,33 +433,28 @@ export default function Editor() {
       return formData;
     } catch (error) {
       console.error('Error preparing FormData:', error);
-      throw error; // Hoặc return null/undefined
+      throw error;
     }
   };
+
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     
-    // Nếu là data URL (từ preview)
     if (imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
       return imagePath;
     }
     
-    // Nếu là đường dẫn server
-    // const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3000';
     const normalizedPath = imagePath.replace(/\\/g, '/');
-    
-    // Đảm bảo có slash ở giữa
     let finalUrl = `http://localhost:3000${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
     
     return finalUrl;
   };
-  // Submit handler
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      // Validate required fields
       if (!project.title.trim() || !project.description.trim()) {
         alert('Vui lòng nhập tiêu đề và mô tả dự án');
         setLoading(false);
@@ -363,20 +464,12 @@ export default function Editor() {
       console.log('Preparing formData...');
       const formData = prepareFormData();
       
-      // DEBUG: Kiểm tra formData
       if (!formData) {
         console.error('formData is null or undefined');
         alert('Lỗi khi chuẩn bị dữ liệu form');
         setLoading(false);
         return;
       }
-  
-      // console.log('formData created:', formData);
-      
-      // DEBUG: Kiểm tra các entries trong formData
-      // for (let [key, value] of formData.entries()) {
-      //   console.log(`formData entry: ${key} =`, value);
-      // }
   
       if (isEditMode) {
         console.log('Updating project...');
@@ -407,6 +500,8 @@ export default function Editor() {
       </div>
     );
   }
+
+ 
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -526,79 +621,308 @@ export default function Editor() {
 
           {/* THÔNG TIN CHI TIẾT */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Thông tin chi tiết</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries({
-                area: 'Diện tích', bedrooms: 'Phòng ngủ', bathrooms: 'Phòng tắm',
-                floors: 'Số tầng', style: 'Phong cách', year: 'Năm xây', location: 'Vị trí'
-              }).map(([k, l]) => (
-                <div key={k}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{l}</label>
-                  <input 
-                    type="text" 
-                    name={`details.${k}`} 
-                    value={project.details[k]} 
-                    onChange={handleInputChange} 
-                    placeholder={l} 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  />
-                </div>
-              ))}
+            <h2 className="text-xl font-semibold mb-6">Thông tin chi tiết</h2>
+            
+            {/* PROPERTY FEATURES */}
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-800">Property Features</h3>
+                <button 
+                  type="button" 
+                  onClick={addPropertyFeature}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Thêm Feature
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {project.propertyFeatures.map((feature, index) => (
+                  <div key={feature.id} className="flex items-center gap-3 group">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={feature.text}
+                        onChange={(e) => updatePropertyFeature(feature.id, e.target.value)}
+                        placeholder="Ví dụ: 5 Bedrooms | 6 Bathrooms"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePropertyFeature(feature.id)}
+                      className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-2"
+                      title="Xóa feature"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                {project.propertyFeatures.length === 0 && (
+                  <div className="text-center py-4 text-gray-500 border-2 border-dashed rounded-lg">
+                    <p>Chưa có property features nào</p>
+                    <p className="text-sm mt-1">Nhấn "Thêm Feature" để bắt đầu</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SPECIFICATION */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-800">Specification</h3>
+                <button 
+                  type="button" 
+                  onClick={addSpecification}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Thêm Specification
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {project.specifications.map((spec, index) => (
+                  <div key={spec.id} className="flex items-center gap-3 group">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={spec.text}
+                        onChange={(e) => updateSpecification(spec.id, e.target.value)}
+                        placeholder="Ví dụ: Heated Pool, Immaculate Reformation, Roof terrace"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSpecification(spec.id)}
+                      className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-2"
+                      title="Xóa specification"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                {project.specifications.length === 0 && (
+                  <div className="text-center py-4 text-gray-500 border-2 border-dashed rounded-lg">
+                    <p>Chưa có specifications nào</p>
+                    <p className="text-sm mt-1">Nhấn "Thêm Specification" để bắt đầu</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* BẢN VẼ MẶT BẰNG */}
+          {/* PROPERTY HIGHLIGHTS */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">Bản vẽ mặt bằng</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {floorPlanPreview.map((img, i) => (
-                  <div key={i} className="relative group">
-                    <img src={getImageUrl(img)} alt="" className="w-full h-32 object-contain bg-gray-50 border rounded-lg" crossOrigin="anonymous"/>
-                    <button type="button" onClick={() => removeImage('floorplan', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                ))}
-                <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50">
-                  <Plus className="w-6 h-6 text-gray-400" />
-                  <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'floorplan')} />
-                </label>
-              </div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Property Highlights</h2>
+              <button 
+                type="button" 
+                onClick={addPropertyHighlight}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Thêm Highlight
+              </button>
             </div>
-
-            {/* TIẾN ĐỘ THI CÔNG */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">Ảnh tiến độ thi công</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {progressPreview.map((img, i) => (
-                  <div key={i} className="relative group">
-                    <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
-                    <button type="button" onClick={() => removeImage('progress', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+            
+            <div className="space-y-6">
+              {project.propertyHighlights.map((highlight) => (
+                <div key={highlight.id} className="p-6 border-2 border-purple-200 rounded-lg bg-purple-50 space-y-4">
+                  {/* Highlight Header */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tên Highlight</label>
+                      <input
+                        type="text"
+                        value={highlight.title}
+                        onChange={(e) => updatePropertyHighlight(highlight.id, 'title', e.target.value)}
+                        placeholder="Ví dụ: EXPANSIVE OUTDOORS"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-lg font-bold uppercase"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePropertyHighlight(highlight.id)}
+                      className="text-red-500 hover:text-red-700 ml-4 mt-7"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
-                ))}
-                <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50">
-                  <Plus className="w-8 h-8 text-gray-400" />
-                  <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'progress')} />
-                </label>
-              </div>
-            </div>
 
-            {/* HÌNH ẢNH THIẾT KẾ */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">Hình ảnh thiết kế (3D/Concept)</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {designPreview.map((img, i) => (
-                  <div key={i} className="relative group">
-                    <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
-                    <button type="button" onClick={() => removeImage('design', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                  {/* Highlight Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                    <textarea
+                      value={highlight.description}
+                      onChange={(e) => updatePropertyHighlight(highlight.id, 'description', e.target.value)}
+                      rows={4}
+                      placeholder="Ví dụ: The imposing building presides over an oasis like garden with a state-of-the-art swimming pool, private dining area, and plentiful sunbathing spaces..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
                   </div>
-                ))}
-                <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50">
-                  <Plus className="w-8 h-8 text-gray-400" />
-                  <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'design')} />
-                </label>
-              </div>
-            </div>
 
-          {/* BROCHURE - UPDATED FOR MULTIPLE */}
+                  {/* Feature Sections */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <label className="block text-sm font-medium text-gray-700">Feature Sections</label>
+                      <button
+                        type="button"
+                        onClick={() => addFeatureSection(highlight.id)}
+                        className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                      >
+                        <Plus className="w-3 h-3" /> Thêm Feature
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {highlight.featureSections.map((section) => (
+                        <div key={section._id} className="flex items-start gap-3 p-3 bg-white border rounded-lg">
+                          <div className="flex-1 space-y-2">
+                            <input
+                              type="text"
+                              value={section.name}
+                              onChange={(e) => updateFeatureSection(highlight._id, section._id, 'name', e.target.value)}
+                              placeholder="Tên feature (ví dụ: SALT WATER EXCHANGE SWIMMING POOL)"
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <textarea
+                              value={section.description}
+                              onChange={(e) => updateFeatureSection(highlight._id, section._id, 'description', e.target.value)}
+                              rows={2}
+                              placeholder="Mô tả feature"
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFeatureSection(highlight._id, section._id)}
+                            className="text-red-500 hover:text-red-700 mt-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      
+                      {highlight.featureSections.length === 0 && (
+                        <div className="text-center py-3 text-gray-500 border border-dashed rounded-lg">
+                          <p className="text-sm">Chưa có feature sections nào</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {project.propertyHighlights.length === 0 && (
+                <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg bg-purple-25">
+                  <p>Chưa có property highlights nào</p>
+                  <p className="text-sm mt-1">Nhấn "Thêm Highlight" để bắt đầu</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* SPECIAL SECTIONS - ĐÃ SỬA */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-6">Các Phần Đặc Biệt</h2>
+            
+            <div className="space-y-6">
+              {console.log('TEST:', project)}
+              {project.specialSections && project.specialSections.length > 0 ? (
+                project.specialSections.map((section) => (
+                  <div key={section._id} className="p-6 border-2 border-orange-200 rounded-lg bg-orange-50 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề</label>
+                        <input
+                          type="text"
+                          value={section.title || ''}
+                          onChange={(e) => updateSpecialSection(section._id, 'title', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg font-bold uppercase"
+                          placeholder="Ví dụ: SPECTACULAR ARCHITECTURE"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả ngắn</label>
+                      <textarea
+                        value={section.shortDescription || ''}
+                        onChange={(e) => updateSpecialSection(section._id, 'shortDescription', e.target.value)}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        placeholder="Mô tả ngắn sẽ hiển thị trực tiếp..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả đầy đủ</label>
+                      <textarea
+                        value={section.fullDescription || ''}
+                        onChange={(e) => updateSpecialSection(section._id, 'fullDescription', e.target.value)}
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        placeholder="Mô tả đầy đủ sẽ hiển thị khi bấm 'Read more'..."
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={section.isExpandable || false}
+                        onChange={() => toggleSpecialSectionExpandable(section._id)}
+                        className="w-4 h-4 text-orange-600"
+                      />
+                      <span className="text-sm font-medium">Bật "Read more" cho section này</span>
+                    </label>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
+                  <p>Không có special sections nào</p>
+                  <p className="text-sm mt-1">Các special sections sẽ được tạo tự động</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* TIẾN ĐỘ THI CÔNG */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Ảnh tiến độ thi công</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {progressPreview.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
+                  <button type="button" onClick={() => removeImage('progress', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50">
+                <Plus className="w-8 h-8 text-gray-400" />
+                <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'progress')} />
+              </label>
+            </div>
+          </div>
+
+          {/* HÌNH ẢNH THIẾT KẾ */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Hình ảnh thiết kế (3D/Concept)</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {designPreview.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
+                  <button type="button" onClick={() => removeImage('design', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50">
+                <Plus className="w-8 h-8 text-gray-400" />
+                <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'design')} />
+              </label>
+            </div>
+          </div>
+
+          {/* BROCHURE */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Brochure (PDF hoặc ảnh) - Multiple</h2>
             <div className="space-y-4">
@@ -651,60 +975,6 @@ export default function Editor() {
                   Đã chọn {brochurePreview.length} brochure
                 </p>
               )}
-            </div>
-          </div>
-
-          {/* FEATURE SECTIONS (giữ nguyên) */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Các phần nổi bật</h2>
-              <button type="button" onClick={addFeatureSection} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md text-sm">
-                <Plus className="w-4 h-4" /> Thêm
-              </button>
-            </div>
-            <div className="space-y-6">
-              {project.featureSections.map(sec => (
-                <div key={sec.id} className="p-5 border rounded-lg bg-gray-50 space-y-3">
-                  <div className="flex justify-between">
-                    <input 
-                      type="text" 
-                      value={sec.title} 
-                      onChange={e => updateFeatureSection(sec.id, 'title', e.target.value)} 
-                      className="text-lg font-bold w-full px-2 py-1 border rounded" 
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => removeFeatureSection(sec.id)} 
-                      className="text-red-500 ml-2"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <textarea 
-                    value={sec.shortDescription} 
-                    onChange={e => updateFeatureSection(sec.id, 'shortDescription', e.target.value)} 
-                    rows={2} 
-                    className="w-full px-3 py-2 border rounded text-sm" 
-                    placeholder="Mô tả ngắn..." 
-                  />
-                  <textarea 
-                    value={sec.fullDescription} 
-                    onChange={e => updateFeatureSection(sec.id, 'fullDescription', e.target.value)} 
-                    rows={3} 
-                    className="w-full px-3 py-2 border rounded text-sm" 
-                    placeholder="Mô tả đầy đủ..." 
-                  />
-                  <label className="flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      checked={sec.isExpandable} 
-                      onChange={() => toggleExpandable(sec.id)} 
-                      className="w-4 h-4 text-green-600" 
-                    />
-                    <span className="text-sm">Bật "Read more"</span>
-                  </label>
-                </div>
-              ))}
             </div>
           </div>
 

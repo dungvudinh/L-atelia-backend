@@ -35,6 +35,7 @@ const userService = {
   // Update user
   updateUser: async (id, userData) => {
     try {
+      console.log('testing')
       const response = await axiosClient.put(`/v1/users/${id}`, userData);
       return response.data;
     } catch (error) {
@@ -55,6 +56,7 @@ const userService = {
   // Change user status
   changeUserStatus: async (id, isActive) => {
     try {
+      console.log(id)
       const response = await axiosClient.patch(`/v1/users/${id}/status`, { isActive });
       return response.data;
     } catch (error) {
@@ -70,7 +72,28 @@ const userService = {
     } catch (error) {
       throw error.response?.data || error;
     }
-  }
+  }, 
+  changeUserStatus: async (id, isActive) => {
+    try {
+      const response = await axiosClient.patch(`/v1/users/${id}/status`, { isActive });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Bulk change status
+  bulkChangeStatus: async (userIds, isActive) => {
+    try {
+      const response = await axiosClient.patch('/v1/users/bulk/status', { 
+        userIds, 
+        isActive 
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 };
 
 export default userService;

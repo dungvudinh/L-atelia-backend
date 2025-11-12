@@ -13,7 +13,8 @@ const routes = {
     booking:'/bookings', 
     bookingEditor:'/bookings/edit/:bookingId', 
     login:'/login', 
-    user:'/users'
+    user:'/users', 
+    accessDenied:'/access-denied'
   };
   
   export default routes;

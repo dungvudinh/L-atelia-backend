@@ -12,7 +12,8 @@ import BookingEditor from '../pages/Booking/editor';
 import RentEditor from "../pages/Rent/editor";
 import Login from "../pages/Login";
 import User from "../pages/User";
-const publicRoutes = [
+import AccessDenied from "../pages/AccessDenied";
+const privateRoutes = [
   {
     path:routes.dashboard, 
     component:Dashboard
@@ -65,15 +66,22 @@ const publicRoutes = [
     path:routes.editProject, 
     component:ProjectEditor
   }, 
+  
+  {
+    path:routes.user, 
+    component:User
+  }, 
+  {
+    path:routes.accessDenied, 
+    component:AccessDenied
+  }
+];
+const publicRoutes = [
   {
     path:routes.login, 
     component:Login, 
     layout:null
   }, 
-  {
-    path:routes.user, 
-    component:User
-  }
-];
+]
 
-export { publicRoutes };
+export { privateRoutes, publicRoutes };

@@ -355,9 +355,9 @@ const Projects = () => {
                             {project.title || 'Chưa có tiêu đề'}
                           </h4>
                         </div>
-                        <p className="text-sm text-gray-500 line-clamp-1 mt-1">
+                        {/* <p className="text-sm text-gray-500 line-clamp-1 mt-1">
                           {project.description || 'Chưa có mô tả'}
-                        </p>
+                        </p> */}
                       </div>
                     </div>
                   </td>
