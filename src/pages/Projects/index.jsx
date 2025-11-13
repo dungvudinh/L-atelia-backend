@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Eye, Calendar, FolderOpen, Image, MapPin } from 'lucide-react';
 import { projectService } from '../../services/projectService';
-
+import { useDispatch, useSelector } from 'react-redux';
 const Projects = () => {
+  const {isLoading} = useSelector(state=>state.loading)
+  const dispatch = useDispatch()
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

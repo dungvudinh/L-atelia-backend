@@ -1,9 +1,11 @@
 // src/utils/axiosClient.js
 import axios from 'axios'
 import { API_ROOT } from '../utils/constants'
-
+console.log( process.env.REACT_APP_API_URL)
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+console.log(API_BASE_URL)
 const axiosClient = axios.create({
-  baseURL: API_ROOT,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -12,6 +14,9 @@ const axiosClient = axios.create({
 // Request Interceptor
 axiosClient.interceptors.request.use(
   (config) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    }
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

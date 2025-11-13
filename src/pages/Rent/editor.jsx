@@ -59,7 +59,8 @@ const RentEditor = () => {
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [localImages, setLocalImages] = useState([]); // Lưu ảnh local khi create
+  const [tempImages, setTempImages] = useState([]); // Ảnh tạm thời khi tạo mới
+  const [uploadProgress, setUploadProgress] = useState({});
 
   const amenitiesOptions = [
     'Safety room',
@@ -134,121 +135,152 @@ const RentEditor = () => {
     }
   };
 
-  // Xử lý upload ảnh với rentId
-  const handleImageUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    console.log('Files selected:', files);
+  // Xử lý upload ảnh - CHỈ TẠO PREVIEW, KHÔNG UPLOAD LÊN CLOUDINARY NGAY
+// Xử lý upload ảnh - PHÂN BIỆT RÕ CREATE vs EDIT
+const handleImageUpload = async (event) => {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
 
-    if (files.length === 0) return;
+  setImageUploading(true);
 
-    setImageUploading(true);
-
-    try {
-      // Nếu đang create mới và chưa có rentId, xử lý local
-      if (!isEditing) {
-        console.log('Creating new rental - handling local preview only');
-        
-        const newImages = files.map(file => ({
-          id: Date.now() + Math.random(),
-          url: URL.createObjectURL(file),
-          name: file.name,
-          isFeatured: formData.gallery.length === 0,
-          file: file // Lưu file object để upload sau khi có rentId
-        }));
-
-        setFormData(prev => {
-          const updatedGallery = [...prev.gallery, ...newImages];
-          const featuredImage = prev.featuredImage || (updatedGallery.length > 0 ? updatedGallery[0].url : '');
-          
-          return {
-            ...prev,
-            gallery: updatedGallery,
-            featuredImage: featuredImage
-          };
-        });
-
-        // Lưu ảnh local để upload sau
-        setLocalImages(prev => [...prev, ...files]);
-      } else {
-        // Nếu đang edit, upload lên server ngay
-        const formDataToUpload = new FormData();
-        files.forEach(file => {
-          formDataToUpload.append('images', file);
-        });
-
-        console.log('Uploading images for rentId:', rentId);
-        
-        const response = await rentService.uploadRentalImages(rentId, formDataToUpload);
-        
-        if (response.success) {
-          console.log('Upload successful:', response.data);
-          setFormData(prev => ({
-            ...prev,
-            gallery: response.data.gallery,
-            featuredImage: response.data.featuredImage
-          }));
-        } else {
-          console.error('Upload failed:', response.message);
-          alert('Failed to upload images: ' + response.message);
-        }
-      }
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      alert('Error uploading images: ' + (error.message || 'Unknown error'));
-    } finally {
-      setImageUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  // Hàm upload ảnh local sau khi tạo rental thành công
-  const uploadLocalImages = async (newRentId) => {
-    if (localImages.length === 0) return;
-
-    try {
+  try {
+    if (isEditing) {
+      // 📌 EDIT MODE: Upload trực tiếp lên Cloudinary
       const formDataToUpload = new FormData();
-      localImages.forEach(file => {
+      files.forEach(file => {
         formDataToUpload.append('images', file);
       });
 
-      console.log('Uploading local images for new rentId:', newRentId);
-      const response = await rentService.uploadRentalImages(newRentId, formDataToUpload);
+      console.log('Uploading images for rentId:', rentId);
+      const response = await rentService.uploadRentalImages(rentId, formDataToUpload);
       
       if (response.success) {
-        console.log('Local images upload successful');
-        // Có thể cập nhật state nếu cần, nhưng thường sẽ redirect nên không cần
-        setLocalImages([]); // Clear local images
+        console.log('Upload successful:', response.data);
+        setFormData(prev => ({
+          ...prev,
+          gallery: response.data.rental.gallery,
+          featuredImage: response.data.featuredImage || prev.featuredImage
+        }));
+      } else {
+        console.error('Upload failed:', response.message);
+        alert('Failed to upload images: ' + response.message);
       }
+    } else {
+      // 📌 CREATE MODE: Chỉ tạo preview local
+      const newTempImages = files.map(file => ({
+        id: `temp-${Date.now()}-${Math.random()}`,
+        url: URL.createObjectURL(file),
+        name: file.name,
+        file: file,
+        isFeatured: formData.gallery.length + tempImages.length === 0,
+        size: file.size,
+        type: file.type,
+        isTemp: true
+      }));
+
+      setTempImages(prev => [...prev, ...newTempImages]);
+    }
+  } catch (error) {
+    console.error('Error uploading images:', error);
+    alert('Error uploading images: ' + (error.message || 'Unknown error'));
+  } finally {
+    setImageUploading(false);
+    event.target.value = '';
+  }
+};
+
+  // Hàm upload ảnh tạm lên Cloudinary sau khi tạo rental thành công
+  const uploadTempImagesToCloudinary = async (newRentId) => {
+    if (tempImages.length === 0) return [];
+
+    try {
+      console.log('📤 Uploading temporary images to Cloudinary...');
+      
+      const uploadPromises = tempImages.map(async (tempImage) => {
+        try {
+          const formData = new FormData();
+          formData.append('images', tempImage.file);
+
+          const response = await rentService.uploadRentalImages(newRentId, formData);
+          
+          if (response.success && response.data.uploadedImages.length > 0) {
+            const uploadedImage = response.data.uploadedImages[0];
+            return {
+              ...uploadedImage,
+              isFeatured: tempImage.isFeatured
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error('❌ Upload failed for:', tempImage.name, error);
+          return null;
+        }
+      });
+
+      const results = await Promise.allSettled(uploadPromises);
+      const successfulUploads = results
+        .filter(result => result.status === 'fulfilled' && result.value)
+        .map(result => result.value);
+
+      console.log(`✅ Successfully uploaded ${successfulUploads.length}/${tempImages.length} images`);
+      
+      // Dọn dẹp temp URLs
+      tempImages.forEach(img => URL.revokeObjectURL(img.url));
+      
+      return successfulUploads;
     } catch (error) {
-      console.error('Error uploading local images:', error);
+      console.error('Error uploading temporary images:', error);
+      return [];
     }
   };
 
-  // Xóa ảnh với API
-  const removeImage = async (imageId) => {
-    if (!window.confirm('Are you sure you want to delete this image?')) {
+  // Xóa ảnh tạm
+  const removeTempImage = (imageId) => {
+    const imageToRemove = tempImages.find(img => img.id === imageId);
+    if (imageToRemove) {
+      URL.revokeObjectURL(imageToRemove.url); // Giải phóng bộ nhớ
+    }
+    
+    setTempImages(prev => {
+      const updated = prev.filter(img => img.id !== imageId);
+      // Nếu xóa ảnh featured, set ảnh đầu tiên làm featured
+      if (updated.length > 0 && prev.find(img => img.id === imageId)?.isFeatured) {
+        updated[0].isFeatured = true;
+      }
+      return updated;
+    });
+  };
+
+  // Set ảnh tạm làm featured
+  const setTempAsFeatured = (imageId) => {
+    setTempImages(prev => 
+      prev.map(img => ({
+        ...img,
+        isFeatured: img.id === imageId
+      }))
+    );
+  };
+
+  // Xóa ảnh từ Cloudinary (khi edit)
+  // Xóa ảnh - XỬ LÝ ĐÚNG CẢ 3 TRƯỜNG HỢP
+const removeImage = async (imageId) => {
+  if (!window.confirm('Are you sure you want to delete this image?')) {
+    return;
+  }
+
+  try {
+    // Tìm ảnh trong tất cả các nguồn
+    const tempImage = tempImages.find(img => img.id === imageId);
+    const cloudinaryImage = formData.gallery.find(img => img.id === imageId);
+
+    // 1. Nếu là ảnh tạm (blob) - dù đang create hay edit
+    if (tempImage) {
+      removeTempImage(imageId);
       return;
     }
 
-    // Nếu đang create (chưa có rentId), chỉ xóa local
-    if (!isEditing) {
-      setFormData(prev => {
-        const updatedGallery = prev.gallery.filter(img => img.id !== imageId);
-        const featuredImage = prev.featuredImage === prev.gallery.find(img => img.id === imageId)?.url 
-          ? (updatedGallery.length > 0 ? updatedGallery[0].url : '')
-          : prev.featuredImage;
-        
-        return {
-          ...prev,
-          gallery: updatedGallery,
-          featuredImage: featuredImage
-        };
-      });
-      return;
-    }
-
-    // Nếu đang edit, xóa trên server
-    try {
+    // 2. Nếu là ảnh Cloudinary VÀ đang edit
+    if (cloudinaryImage && isEditing) {
       const response = await rentService.deleteRentalImage(rentId, imageId);
       
       if (response.success) {
@@ -260,29 +292,50 @@ const RentEditor = () => {
       } else {
         alert('Failed to delete image: ' + response.message);
       }
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      alert('Error deleting image');
+      return;
     }
-  };
 
-  // Set featured image với API
-  const setAsFeatured = async (imageId) => {
-    // Nếu đang create (chưa có rentId), chỉ set local
-    if (!isEditing) {
+    // 3. Nếu là ảnh Cloudinary NHƯNG đang create (hiếm khi xảy ra)
+    if (cloudinaryImage && !isEditing) {
       setFormData(prev => ({
         ...prev,
-        gallery: prev.gallery.map(img => ({
-          ...img,
-          isFeatured: img.id === imageId
-        })),
-        featuredImage: prev.gallery.find(img => img.id === imageId)?.url || ''
+        gallery: prev.gallery.filter(img => img.id !== imageId),
+        featuredImage: prev.featuredImage === cloudinaryImage.url 
+          ? (prev.gallery.find(img => img.id !== imageId)?.url || '')
+          : prev.featuredImage
       }));
       return;
     }
 
-    // Nếu đang edit, set trên server
-    try {
+    console.warn('Image not found:', imageId);
+    
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    alert('Error deleting image: ' + (error.message || 'Unknown error'));
+  }
+};
+
+  // Set featured image
+  // Set featured image - PHÂN BIỆT RÕ
+const setAsFeatured = async (imageId) => {
+  try {
+    // Tìm ảnh trong tất cả các nguồn
+    const tempImage = tempImages.find(img => img.id === imageId);
+    const cloudinaryImage = formData.gallery.find(img => img.id === imageId);
+
+    // 1. Nếu là ảnh tạm
+    if (tempImage) {
+      setTempImages(prev => 
+        prev.map(img => ({
+          ...img,
+          isFeatured: img.id === imageId
+        }))
+      );
+      return;
+    }
+
+    // 2. Nếu là ảnh Cloudinary VÀ đang edit
+    if (cloudinaryImage && isEditing) {
       const response = await rentService.setFeaturedImage(rentId, imageId);
       
       if (response.success) {
@@ -294,11 +347,27 @@ const RentEditor = () => {
       } else {
         alert('Failed to set featured image: ' + response.message);
       }
-    } catch (error) {
-      console.error('Error setting featured image:', error);
-      alert('Error setting featured image');
+      return;
     }
-  };
+
+    // 3. Nếu là ảnh Cloudinary NHƯNG đang create
+    if (cloudinaryImage && !isEditing) {
+      setFormData(prev => ({
+        ...prev,
+        gallery: prev.gallery.map(img => ({
+          ...img,
+          isFeatured: img.id === imageId
+        })),
+        featuredImage: cloudinaryImage.url
+      }));
+      return;
+    }
+    
+  } catch (error) {
+    console.error('Error setting featured image:', error);
+    alert('Error setting featured image');
+  }
+};
 
   // Xử lý submit form
   const handleSubmit = async (e) => {
@@ -315,27 +384,55 @@ const RentEditor = () => {
       }
 
       let response;
+
       if (isEditing) {
+        // EDIT MODE: Update rental với gallery hiện tại
         response = await rentService.updateRental(rentId, formData);
-      } else {
-        response = await rentService.createRental(formData);
         
-        // Nếu tạo mới thành công, upload ảnh local
-        if (response.success && response.data._id) {
+        if (response.success) {
+          alert('Rental updated successfully!');
+          navigate('/rent');
+        }
+      } else {
+        // CREATE MODE: Tạo rental trước, sau đó upload ảnh
+        response = await rentService.createRental({
+          ...formData,
+          gallery: [] // Ban đầu gallery rỗng
+        });
+
+        if (response.success) {
           const newRentId = response.data._id;
-          await uploadLocalImages(newRentId);
+          console.log('✅ Rental created with ID:', newRentId);
+          
+          // Upload ảnh tạm lên Cloudinary
+          if (tempImages.length > 0) {
+            const uploadedImages = await uploadTempImagesToCloudinary(newRentId);
+            
+            if (uploadedImages.length > 0) {
+              // Update rental với gallery từ Cloudinary
+              const featuredImage = uploadedImages.find(img => img.isFeatured)?.url || 
+                                 uploadedImages[0]?.url || '';
+              
+              await rentService.updateRental(newRentId, {
+                gallery: uploadedImages,
+                featuredImage: featuredImage
+              });
+              
+              console.log('✅ Rental gallery updated with Cloudinary images');
+            }
+          }
+          
+          alert('Rental created successfully!');
+          navigate('/rent');
         }
       }
 
-      if (response.success) {
-        alert(`Rental ${isEditing ? 'updated' : 'created'} successfully!`);
-        navigate('/rent');
-      } else {
+      if (!response.success) {
         alert(`Failed to ${isEditing ? 'update' : 'create'} rental: ${response.message}`);
       }
     } catch (error) {
       console.error('Error saving rental:', error);
-      alert(`Error ${isEditing ? 'updating' : 'creating'} rental`);
+      alert(`Error ${isEditing ? 'updating' : 'creating'} rental: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -432,8 +529,17 @@ const RentEditor = () => {
         : [...prev.amenities, amenity]
     }));
   };
+console.log(formData)
+  // Kết hợp gallery từ Cloudinary và ảnh tạm để hiển thị
+  const getCombinedGallery = () => {
+    const cloudinaryImages = formData.gallery.map(img => ({ ...img, source: 'cloudinary' }));
+    const tempImagesWithSource = tempImages.map(img => ({ ...img, source: 'temp' }));
+    
+    return [...cloudinaryImages, ...tempImagesWithSource];
+  };
 
-  const sortedGallery = [...formData.gallery].sort((a, b) => {
+  const combinedGallery = getCombinedGallery();
+  const sortedGallery = [...combinedGallery].sort((a, b) => {
     if (a.isFeatured) return -1;
     if (b.isFeatured) return 1;
     return 0;
@@ -625,7 +731,7 @@ const RentEditor = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Property Images</h2>
           
-          {/* Upload Area - Sử dụng button trigger */}
+          {/* Upload Area */}
           <div className="mb-6">
             <input
               ref={fileInputRef}
@@ -652,14 +758,14 @@ const RentEditor = () => {
                 </p>
                 <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX. 10MB each)</p>
                 {imageUploading && (
-                  <p className="text-xs text-blue-500 mt-2">Uploading...</p>
+                  <p className="text-xs text-blue-500 mt-2">Processing images...</p>
                 )}
               </div>
             </button>
             
-            {!isEditing && (
-              <p className="text-sm text-gray-500 mt-2 text-center">
-                Images will be saved to server after creating the rental
+            {!isEditing && tempImages.length > 0 && (
+              <p className="text-sm text-green-600 mt-2 text-center">
+                ✅ {tempImages.length} image(s) ready - will be uploaded to Cloudinary after creating rental
               </p>
             )}
           </div>
@@ -667,7 +773,7 @@ const RentEditor = () => {
           {imageUploading && (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-              <span className="ml-3 text-gray-600">Uploading images...</span>
+              <span className="ml-3 text-gray-600">Processing images...</span>
             </div>
           )}
 
@@ -675,7 +781,14 @@ const RentEditor = () => {
           {sortedGallery.length > 0 && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Gallery Images</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Gallery Images ({sortedGallery.length})
+                  {tempImages.length > 0 && (
+                    <span className="text-sm text-green-600 ml-2">
+                      ({tempImages.length} new)
+                    </span>
+                  )}
+                </h3>
                 <p className="text-sm text-gray-600 mb-4">
                   First image will be used as featured image in listings. Click "Set as Featured" to change.
                 </p>
@@ -684,10 +797,10 @@ const RentEditor = () => {
                 <div className="mb-6">
                   <h4 className="text-md font-medium text-gray-900 mb-3">Featured Image</h4>
                   <div className="bg-gray-50 rounded-lg p-4 border-2 border-blue-200">
-                    {formData.featuredImage ? (
+                    {sortedGallery.find(img => img.isFeatured) ? (
                       <div className="relative group">
                         <img 
-                          src={formData.featuredImage} 
+                          src={sortedGallery.find(img => img.isFeatured)?.url} 
                           alt="Featured" 
                           className="w-full h-64 object-cover rounded-lg"
                           onError={(e) => {
@@ -704,6 +817,13 @@ const RentEditor = () => {
                             Displayed in listings
                           </span>
                         </div>
+                        {sortedGallery.find(img => img.isFeatured)?.source === 'temp' && (
+                          <div className="absolute top-3 left-3">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
+                              Preview
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center py-12">
@@ -718,7 +838,7 @@ const RentEditor = () => {
 
                 {/* Gallery Images Grid */}
                 <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-3">All Images ({sortedGallery.length})</h4>
+                  <h4 className="text-md font-medium text-gray-900 mb-3">All Images</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     {sortedGallery.map((image, index) => (
                       <div
@@ -774,8 +894,19 @@ const RentEditor = () => {
                             </div>
                           )}
 
-                          {/* Image Number */}
+                          {/* Source Badge */}
                           <div className="absolute top-2 right-2">
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                              image.source === 'cloudinary' 
+                                ? 'bg-green-500 text-white' 
+                                : 'bg-yellow-500 text-white'
+                            }`}>
+                              {image.source === 'cloudinary' ? 'Cloudinary' : 'Preview'}
+                            </span>
+                          </div>
+
+                          {/* Image Number */}
+                          <div className="absolute bottom-2 left-2">
                             <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-black bg-opacity-50 text-white">
                               {index + 1}
                             </span>
@@ -787,9 +918,14 @@ const RentEditor = () => {
                           <p className="text-xs font-medium text-gray-900 truncate mb-1">
                             {image.name}
                           </p>
-                          {image.isFeatured && (
-                            <p className="text-xs text-blue-600 font-medium">Main thumbnail</p>
-                          )}
+                          <div className="flex justify-between items-center">
+                            {image.isFeatured && (
+                              <p className="text-xs text-blue-600 font-medium">Main thumbnail</p>
+                            )}
+                            {image.source === 'temp' && (
+                              <p className="text-xs text-yellow-600">Ready to upload</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1050,7 +1186,11 @@ const RentEditor = () => {
         <div className="flex justify-end space-x-4">
           <button
             type="button"
-            onClick={() => navigate('/rent')}
+            onClick={() => {
+              // Dọn dẹp temp URLs khi cancel
+              tempImages.forEach(img => URL.revokeObjectURL(img.url));
+              navigate('/rent');
+            }}
             className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
           >
             Cancel

@@ -338,10 +338,11 @@ export default function Editor() {
   };
 
   const updateFeatureSection = (highlightId, sectionId, field, value) => {
+    console.log(value)
     setProject(prev => ({
       ...prev,
       propertyHighlights: prev.propertyHighlights.map(highlight =>
-        highlight.id === highlightId
+        highlight._id === highlightId
           ? {
               ...highlight,
               featureSections: highlight.featureSections.map(section =>

@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import rentService from '../../services/rentService';
-
+import { useDispatch, useSelector } from 'react-redux';
 const RentList = () => {
+  const {isLoading} = useSelector(state=>state.loading)
   const [rentals, setRentals] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -13,7 +14,6 @@ const RentList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-
   // Fetch rentals from API
   useEffect(() => {
     fetchRentals();
