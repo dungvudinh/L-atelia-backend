@@ -11,6 +11,7 @@
     "preview": "vite preview --host"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.10.1",
     "@tailwindcss/vite": "^4.1.16",
     "@tinymce/tinymce-react": "^6.3.0",
     "@tiptap/extension-image": "^3.10.2",

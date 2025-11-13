@@ -74,7 +74,6 @@ const MediaEditor = () => {
       formData.append('featuredImage', file);
 
       const response = await mediaService.uploadFeaturedImage(formData);
-      console.log(response.data.url)
       // Lưu đường dẫn vào formData
       setFormData(prev => ({
         ...prev,
@@ -90,13 +89,15 @@ const MediaEditor = () => {
   };
   const handleDeleteFeaturedImage = async () => {
     if (!formData.featuredImage) return;
-
     try {
       // Lấy filename từ đường dẫn
-      const filename = formData.featuredImage.split('/').pop();
+      const imageInfo = {
+        imageUrl: formData.featuredImage,  // URL đầy đủ (cho Cloudinary)
+        filename: formData.featuredImage.split('/').pop() // Tên file (cho local)
+      };
       
       // Gọi API xóa file
-      await mediaService.deleteFeaturedImage(filename);
+      await mediaService.deleteFeaturedImage(imageInfo);
       
       // Xóa khỏi form data
       setFormData(prev => ({
@@ -490,7 +491,7 @@ const MediaManager = ({ onClose, editorRef }) => {
       }
     }
   };
-
+  console.log(images)
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0 || !currentFolder) return;
@@ -505,9 +506,9 @@ const MediaManager = ({ onClose, editorRef }) => {
       });
 
       const response = await folderService.uploadImages(currentFolder._id, formData);
-      
+      console.log('RESPONSE', response)
       // Cập nhật state một lần duy nhất
-      const newImages = response.data;
+      const newImages = response.data.uploadedImages;
       setImages(prev => [...prev, ...newImages]);
       
       setFolders(prev => prev.map(folder => 
