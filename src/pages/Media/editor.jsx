@@ -74,11 +74,11 @@ const MediaEditor = () => {
       formData.append('featuredImage', file);
 
       const response = await mediaService.uploadFeaturedImage(formData);
-      
+      console.log(response.data.url)
       // Lưu đường dẫn vào formData
       setFormData(prev => ({
         ...prev,
-        featuredImage: response.data.path // Lưu đường dẫn tương đối
+        featuredImage: response.data.url // Lưu đường dẫn tương đối
       }));
       
     } catch (error) {

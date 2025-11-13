@@ -81,7 +81,6 @@ export default function Editor() {
       setLoading(true);
       const res = await projectService.getProjectById(id);
       const p = res.data;
-      console.log("P", p)
       
       // Set basic project data với cấu trúc mới
       setProject({
@@ -445,7 +444,7 @@ export default function Editor() {
     }
     
     const normalizedPath = imagePath.replace(/\\/g, '/');
-    let finalUrl = `http://localhost:3000${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    let finalUrl = `${normalizedPath}`;
     
     return finalUrl;
   };

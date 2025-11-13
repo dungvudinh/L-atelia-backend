@@ -27,5 +27,8 @@ export default defineConfig({
    preview: {
     port: 4173,
     // host: true
+  }, 
+  define:{
+    'process.env':process.env
   }
 })
