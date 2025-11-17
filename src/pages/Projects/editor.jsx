@@ -55,9 +55,10 @@ export default function Editor() {
     designImages: [],
     brochure: [],
     propertyHighlights: [],
-    specialSections: getDefaultSpecialSections() // THÊM DỮ LIỆU MẶC ĐỊNH NGAY TỪ ĐẦU
+    specialSections: getDefaultSpecialSections()
   });
-  // Preview states
+
+  // Preview states - ĐÃ SỬA ĐỂ HỖ TRỢ OBJECT {url, uploaded_at}
   const [galleryPreview, setGalleryPreview] = useState([]);
   const [progressPreview, setProgressPreview] = useState([]);
   const [designPreview, setDesignPreview] = useState([]);
@@ -82,44 +83,67 @@ export default function Editor() {
       const res = await projectService.getProjectById(id);
       const p = res.data;
       
+      console.log('Loaded project data:', p);
+
+      // Hàm extract URL từ image object {url, uploaded_at} hoặc string (backward compatibility)
+      const extractUrl = (imageData) => {
+        if (!imageData) return '';
+        if (typeof imageData === 'object' && imageData.url) {
+          return imageData.url;
+        }
+        return imageData;
+      };
+
+      // Hàm extract toàn bộ image data (giữ nguyên object nếu có)
+      const extractImageData = (imageData) => {
+        if (!imageData) return '';
+        return imageData;
+      };
+
       // Set basic project data với cấu trúc mới
       setProject({
         title: p.title || '',
         description: p.description || '',
         status: p.status || 'draft',
         location: p.location || '',
-        heroImage: p.heroImage || '',
-        gallery: p.gallery || [],
+        heroImage: extractImageData(p.heroImage) || '',
+        gallery: p.gallery ? p.gallery.map(extractImageData) : [],
         propertyFeatures: p.propertyFeatures || [],
         specifications: p.specifications || [],
-        constructionProgress: p.constructionProgress || [],
-        designImages: p.designImages || [],
-        brochure: p.brochure || [],
+        constructionProgress: p.constructionProgress ? p.constructionProgress.map(extractImageData) : [],
+        designImages: p.designImages ? p.designImages.map(extractImageData) : [],
+        brochure: p.brochure ? p.brochure.map(extractImageData) : [],
         propertyHighlights: p.propertyHighlights || [],
-        specialSections: p.specialSections.length > 0 ? p.specialSections:  getDefaultSpecialSections() // ĐẢM BẢO LUÔN CÓ DỮ LIỆU
+        specialSections: p.specialSections && p.specialSections.length > 0 ? p.specialSections : getDefaultSpecialSections()
       });
 
-      // Set previews với existing images
-      setGalleryPreview(p.gallery || []);
-      setProgressPreview(p.constructionProgress || []);
-      setDesignPreview(p.designImages || []);
+      // Set previews với existing images - CHỈ LẤY URL ĐỂ HIỂN THỊ
+      setGalleryPreview(p.gallery ? p.gallery.map(extractUrl) : []);
+      setProgressPreview(p.constructionProgress ? p.constructionProgress.map(extractUrl) : []);
+      setDesignPreview(p.designImages ? p.designImages.map(extractUrl) : []);
       
-      // Xử lý brochure
+      // Xử lý brochure - ĐÃ SỬA ĐỂ HỖ TRỢ OBJECT {url, uploaded_at}
       if (p.brochure) {
         if (Array.isArray(p.brochure)) {
-          const brochurePreviews = p.brochure.map(url => ({
-            url,
-            name: url.split('/').pop() || 'brochure.pdf',
-            type: url.endsWith('.pdf') ? 'application/pdf' : 'image/*'
-          }));
+          const brochurePreviews = p.brochure.map(brochure => {
+            const url = extractUrl(brochure);
+            return {
+              url,
+              name: url.split('/').pop() || 'brochure.pdf',
+              type: url.endsWith('.pdf') ? 'application/pdf' : 'image/*'
+            };
+          });
           setBrochurePreview(brochurePreviews);
         } else {
+          const url = extractUrl(p.brochure);
           setBrochurePreview([{
-            url: p.brochure,
+            url: url,
             name: 'brochure.pdf',
-            type: p.brochure.endsWith('.pdf') ? 'application/pdf' : 'image/*'
+            type: url.endsWith('.pdf') ? 'application/pdf' : 'image/*'
           }]);
         }
+      } else {
+        setBrochurePreview([]);
       }
       
       // Reset file objects
@@ -338,7 +362,6 @@ export default function Editor() {
   };
 
   const updateFeatureSection = (highlightId, sectionId, field, value) => {
-    console.log(value)
     setProject(prev => ({
       ...prev,
       propertyHighlights: prev.propertyHighlights.map(highlight =>
@@ -370,7 +393,6 @@ export default function Editor() {
 
   // Special Sections Functions
   const updateSpecialSection = (id, field, value) => {
-    console.log(`Updating special section ${id}, field: ${field}, value:`, value);
     setProject(prev => ({
       ...prev,
       specialSections: prev.specialSections.map(section =>
@@ -380,7 +402,6 @@ export default function Editor() {
   };
 
   const toggleSpecialSectionExpandable = (id) => {
-    console.log(`Toggling expandable for section ${id}`);
     setProject(prev => ({
       ...prev,
       specialSections: prev.specialSections.map(section =>
@@ -388,6 +409,7 @@ export default function Editor() {
       )
     }));
   };
+
   // Prepare form data for API call
   const prepareFormData = () => {
     try {
@@ -437,17 +459,31 @@ export default function Editor() {
     }
   };
 
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
+  // Hàm getImageUrl - ĐÃ SỬA ĐỂ HỖ TRỢ OBJECT {url, uploaded_at}
+  const getImageUrl = (imageData) => {
+    if (!imageData) return null;
     
-    if (imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-      return imagePath;
+    // Nếu là object {url, uploaded_at}
+    if (typeof imageData === 'object' && imageData.url) {
+      const url = imageData.url;
+      if (url.startsWith('blob:') || url.startsWith('data:')) {
+        return url;
+      }
+      // Đảm bảo URL hiển thị đúng từ Cloudinary
+      const normalizedPath = url.replace(/\\/g, '/');
+      return normalizedPath;
     }
     
-    const normalizedPath = imagePath.replace(/\\/g, '/');
-    let finalUrl = `${normalizedPath}`;
+    // Nếu là string (backward compatibility)
+    if (typeof imageData === 'string') {
+      if (imageData.startsWith('blob:') || imageData.startsWith('data:')) {
+        return imageData;
+      }
+      const normalizedPath = imageData.replace(/\\/g, '/');
+      return normalizedPath;
+    }
     
-    return finalUrl;
+    return null;
   };
 
   const handleSubmit = async (e) => {
@@ -500,8 +536,6 @@ export default function Editor() {
       </div>
     );
   }
-
- 
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -824,12 +858,11 @@ export default function Editor() {
             </div>
           </div>
 
-          {/* SPECIAL SECTIONS - ĐÃ SỬA */}
+          {/* SPECIAL SECTIONS */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-6">Các Phần Đặc Biệt</h2>
             
             <div className="space-y-6">
-              {console.log('TEST:', project)}
               {project.specialSections && project.specialSections.length > 0 ? (
                 project.specialSections.map((section) => (
                   <div key={section._id} className="p-6 border-2 border-orange-200 rounded-lg bg-orange-50 space-y-4">

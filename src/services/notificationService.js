@@ -6,6 +6,7 @@ const notificationService = {
   getNewBookings: async () => {
     try {
       const response = await axiosClient.get('/v1/notifications/new');
+      console.log('notification', response)
       return response.data;
     } catch (error) {
       console.error('Error fetching new bookings:', error);

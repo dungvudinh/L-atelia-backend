@@ -5,9 +5,9 @@ import bookingService from '../../services/bookingService';
 import rentService from '../../services/rentService';
 
 const BookingEditor = () => {
-  const { id } = useParams();
+  const { bookingId } = useParams();
   const navigate = useNavigate();
-  const isEditing = Boolean(id);
+  const isEditing = Boolean(bookingId);
   
   const [formData, setFormData] = useState({
     bookingNumber: '',
@@ -17,19 +17,16 @@ const BookingEditor = () => {
       phone: '',
       address: ''
     },
-    property: {
-      id: '',
-      title: '',
-      location: '',
-      price: ''
-    },
+    propertyId: '', // Sửa từ property.id thành propertyId để phù hợp với model
     checkIn: '',
     checkOut: '',
-    guests: 1,
+    adults: 1, // Đổi từ guests sang adults
+    children: 0, // Thêm children
     status: 'pending',
     paymentStatus: 'pending',
     specialRequests: '',
-    notes: ''
+    notes: '',
+    totalAmount: 0
   });
 
   const [loading, setLoading] = useState(false);
@@ -38,23 +35,211 @@ const BookingEditor = () => {
   const [properties, setProperties] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
-
-  // Fetch properties from database (rents)
+  const [availableProperties, setAvailableProperties] = useState([]); // Thêm state mới
+  // Fetch properties từ database
   useEffect(() => {
     const fetchProperties = async () => {
       try {
         const propertiesData = await rentService.getAllRentals();
-        console.log(propertiesData)
-        setProperties(propertiesData.data);
+        const propertiesList = propertiesData.data || propertiesData;
+        setProperties(propertiesData.data || propertiesData);
+        setAvailableProperties(propertiesList);
       } catch (error) {
         console.error('Error fetching properties:', error);
-        // Fallback to empty array if API fails
         setProperties([]);
       }
     };
 
     fetchProperties();
   }, []);
+
+  // Fetch booking data khi edit
+  useEffect(() => {
+    if (isEditing) {
+      const fetchBookingData = async () => {
+        setLoading(true);
+        try {
+          const bookingData = await bookingService.getBookingById(bookingId);
+          console.log('Booking data:', bookingData);
+          
+          // Transform data để phù hợp với form state
+          // Giả sử bookingData có adults và children, nếu không sẽ dùng giá trị mặc định
+          const transformedData = {
+            ...bookingData.data || bookingData,
+            propertyId: bookingData.data?.propertyId?._id || bookingData.data?.propertyId || bookingData.propertyId,
+            adults: bookingData.data?.adults || 1,
+            children: bookingData.data?.children || 0
+          };
+          
+          setFormData(transformedData);
+        } catch (error) {
+          console.error('Error fetching booking data:', error);
+          // Fallback data cho demo
+          const mockData = {
+            bookingNumber: 'BK-001',
+            customer: {
+              name: 'John Smith',
+              email: 'john.smith@email.com',
+              phone: '+1234567890',
+              address: '123 Main St, New York, USA'
+            },
+            propertyId: '1',
+            checkIn: '2024-02-15',
+            checkOut: '2024-02-20',
+            adults: 2,
+            children: 1,
+            status: 'confirmed',
+            paymentStatus: 'paid',
+            specialRequests: 'Early check-in would be appreciated',
+            notes: 'Customer requested early check-in at 1 PM',
+            totalAmount: 2500
+          };
+          setFormData(mockData);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchBookingData();
+    } else {
+      // Generate booking number cho booking mới
+      const newBookingNumber = `BK-${Date.now().toString().slice(-6)}`;
+      setFormData(prev => ({ ...prev, bookingNumber: newBookingNumber }));
+    }
+  }, [bookingId, isEditing]);
+
+  const checkAllPropertiesAvailability = async (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return;
+    
+    setAvailabilityLoading(true);
+    setAvailabilityError('');
+
+    try {
+      const availabilityPromises = properties.map(async (property) => {
+        try {
+          const propertyId = property.id || property._id;
+          const result = await bookingService.checkAvailability(
+            propertyId, 
+            checkIn, 
+            checkOut,
+            isEditing ? bookingId : null // Exclude current booking khi edit
+          );
+          
+          return {
+            property,
+            available: result.data?.available || result.available || false
+          };
+        } catch (error) {
+          console.error(`Error checking availability for property ${property.id}:`, error);
+          return {
+            property,
+            available: false,
+            error: error.message
+          };
+        }
+      });
+
+      const results = await Promise.all(availabilityPromises);
+      
+      // Lọc ra các properties available
+      const availableProps = results
+        .filter(result => result.available)
+        .map(result => result.property);
+
+      setAvailableProperties(availableProps);
+
+      // Nếu property hiện tại không available, reset propertyId
+      const currentPropertyId = formData.propertyId;
+      if (currentPropertyId && !availableProps.some(p => (p.id || p._id) === currentPropertyId)) {
+        setFormData(prev => ({ ...prev, propertyId: '' }));
+        setAvailabilityError('Currently selected property is not available for the chosen dates. Please select another property.');
+      }
+
+    } catch (error) {
+      console.error('Error checking properties availability:', error);
+      setAvailabilityError('Error checking properties availability');
+      // Fallback: hiển thị tất cả properties nếu có lỗi
+      setAvailableProperties(properties);
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePropertyChange = async (e) => {
+    const propertyId = e.target.value;
+    const selectedProperty = properties.find(p => p.id === propertyId || p._id === propertyId);
+    
+    if (selectedProperty) {
+      setFormData(prev => ({
+        ...prev,
+        propertyId: selectedProperty.id || selectedProperty._id,
+        totalAmount: prev.totalAmount // Giữ nguyên totalAmount, sẽ tính lại khi save
+      }));
+
+      // Check availability nếu đã có dates
+      if (formData.checkIn && formData.checkOut) {
+        const isAvailable = await checkPropertyAvailability(
+          selectedProperty.id || selectedProperty._id, 
+          formData.checkIn, 
+          formData.checkOut
+        );
+        if (!isAvailable) {
+          setAvailabilityError('Property is not available for the selected dates');
+        } else {
+          setAvailabilityError('');
+        }
+      }
+    }
+  };
+
+  const handleDateChange = async (field, value) => {
+    const updatedFormData = { 
+      ...formData, 
+      [field]: value 
+    };
+    
+    setFormData(updatedFormData);
+
+    // Check availability cho tất cả properties khi dates thay đổi
+    if (((field === 'checkIn' && updatedFormData.checkOut) || 
+         (field === 'checkOut' && updatedFormData.checkIn))) {
+      
+      const checkIn = field === 'checkIn' ? value : formData.checkIn;
+      const checkOut = field === 'checkOut' ? value : formData.checkOut;
+      
+      if (checkIn && checkOut && checkIn < checkOut) {
+        await checkAllPropertiesAvailability(checkIn, checkOut);
+      } else {
+        // Nếu dates không hợp lệ, hiển thị tất cả properties
+        setAvailableProperties(properties);
+      }
+    }
+  };
+
+  // Thay thế handleGuestsChange bằng các hàm mới
+  const handleAdultsChange = (e) => {
+    const value = parseInt(e.target.value) || 1;
+    setFormData(prev => ({
+      ...prev,
+      adults: Math.max(1, value) // Đảm bảo ít nhất 1 người lớn
+    }));
+  };
+
+  const handleChildrenChange = (e) => {
+    const value = parseInt(e.target.value) || 0;
+    setFormData(prev => ({
+      ...prev,
+      children: Math.max(0, value) // Đảm bảo không âm
+    }));
+  };
 
   // Check property availability
   const checkPropertyAvailability = async (propertyId, checkIn, checkOut, excludeBookingId = null) => {
@@ -70,7 +255,7 @@ const BookingEditor = () => {
         checkOut, 
         excludeBookingId
       );
-      return result.available;
+      return result.data?.available || result.available;
     } catch (error) {
       console.error('Error checking availability:', error);
       setAvailabilityError(error.message || 'Error checking availability');
@@ -80,156 +265,34 @@ const BookingEditor = () => {
     }
   };
 
-  useEffect(() => {
-    if (isEditing) {
-      const fetchBookingData = async () => {
-        setLoading(true);
-        try {
-          const bookingData = await bookingService.getBookingById(id);
-          setFormData(bookingData);
-        } catch (error) {
-          console.error('Error fetching booking data:', error);
-          // Fallback to mock data for demonstration if API fails
-          const mockData = {
-            bookingNumber: 'BK-001',
-            customer: {
-              name: 'John Smith',
-              email: 'john.smith@email.com',
-              phone: '+1234567890',
-              address: '123 Main St, New York, USA'
-            },
-            property: {
-              id: 1,
-              title: 'Villa Shirla',
-              location: 'South, Sinh, San Rafael',
-              price: 500
-            },
-            checkIn: '2024-02-15',
-            checkOut: '2024-02-20',
-            guests: 2,
-            status: 'confirmed',
-            paymentStatus: 'paid',
-            specialRequests: 'Early check-in would be appreciated',
-            notes: 'Customer requested early check-in at 1 PM'
-          };
-          setFormData(mockData);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchBookingData();
-    } else {
-      // Generate booking number for new booking
-      const newBookingNumber = `BK-${Date.now().toString().slice(-6)}`;
-      setFormData(prev => ({ ...prev, bookingNumber: newBookingNumber }));
-    }
-  }, [id, isEditing]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handlePropertyChange = async (e) => {
-    const propertyId = parseInt(e.target.value);
-    const selectedProperty = properties.find(p => p.id === propertyId);
-    
-    if (selectedProperty) {
-      setFormData(prev => ({
-        ...prev,
-        property: {
-          id: selectedProperty.id,
-          title: selectedProperty.title,
-          location: selectedProperty.location,
-          price: selectedProperty.price
-        }
-      }));
-
-      // Check availability if dates are already selected
-      if (prev.checkIn && prev.checkOut) {
-        const isAvailable = await checkPropertyAvailability(
-          selectedProperty.id, 
-          prev.checkIn, 
-          prev.checkOut
-        );
-        if (!isAvailable) {
-          setAvailabilityError('Property is not available for the selected dates');
-        } else {
-          setAvailabilityError('');
-        }
-      }
-    } else {
-      // Reset property if no selection
-      setFormData(prev => ({
-        ...prev,
-        property: {
-          id: '',
-          title: '',
-          location: '',
-          price: ''
-        }
-      }));
-    }
-  };
-
-  const handleDateChange = async (field, value) => {
-    const updatedFormData = { 
-      ...formData, 
-      [field]: value 
-    };
-    
-    setFormData(updatedFormData);
-
-    // Check availability if both dates and property are selected
-    if (updatedFormData.property.id && 
-        ((field === 'checkIn' && updatedFormData.checkOut) || 
-         (field === 'checkOut' && updatedFormData.checkIn))) {
-      
-      const checkIn = field === 'checkIn' ? value : formData.checkIn;
-      const checkOut = field === 'checkOut' ? value : formData.checkOut;
-      
-      if (checkIn && checkOut) {
-        const isAvailable = await checkPropertyAvailability(
-          updatedFormData.property.id, 
-          checkIn, 
-          checkOut
-        );
-        if (!isAvailable) {
-          setAvailabilityError('Property is not available for the selected dates');
-        } else {
-          setAvailabilityError('');
-        }
-      }
-    }
-  };
-
-  const handleGuestsChange = (e) => {
-    const { value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      guests: parseInt(value) || 1
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate required fields
-    if (!formData.property.id || !formData.checkIn || !formData.checkOut || !formData.guests) {
+    if (!formData.propertyId || !formData.checkIn || !formData.checkOut || !formData.adults) {
       alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate dates
+    if (new Date(formData.checkIn) >= new Date(formData.checkOut)) {
+      alert('Check-out date must be after check-in date');
+      return;
+    }
+
+    // Validate total guests (tùy chọn)
+    const totalGuests = formData.adults + formData.children;
+    if (totalGuests < 1) {
+      alert('There must be at least 1 guest');
       return;
     }
 
     // Validate availability before submitting
     const isAvailable = await checkPropertyAvailability(
-      formData.property.id,
+      formData.propertyId,
       formData.checkIn,
       formData.checkOut,
-      id
+      bookingId
     );
     
     if (!isAvailable) {
@@ -241,7 +304,7 @@ const BookingEditor = () => {
 
     try {
       if (isEditing) {
-        await bookingService.updateBooking(id, formData);
+        await bookingService.updateBooking(bookingId, formData);
       } else {
         await bookingService.createBooking(formData);
       }
@@ -255,24 +318,10 @@ const BookingEditor = () => {
     }
   };
 
+  // Hàm gửi email - TẠM THỜI VÔ HIỆU HÓA
   const handleSendEmail = async () => {
-    if (!id) {
-      alert('Please save the booking first before sending email');
-      return;
-    }
-
-    setSendingEmail(true);
-    
-    try {
-      await bookingService.sendBookingEmail(id, 'update');
-      setEmailSent(true);
-      setTimeout(() => setEmailSent(false), 3000);
-    } catch (error) {
-      console.error('Error sending email:', error);
-      alert(error.message || 'Failed to send email');
-    } finally {
-      setSendingEmail(false);
-    }
+    alert('Email sending feature is temporarily disabled');
+    return;
   };
 
   const calculateNights = () => {
@@ -290,6 +339,11 @@ const BookingEditor = () => {
       currency: 'USD'
     }).format(amount);
   };
+
+  // Lấy thông tin property đã chọn
+  const selectedProperty = properties.find(p => 
+    p.id === formData.propertyId || p._id === formData.propertyId
+  );
 
   if (loading && isEditing) {
     return (
@@ -310,7 +364,7 @@ const BookingEditor = () => {
             {isEditing ? 'Edit Booking' : 'Create New Booking'}
           </h1>
           <p className="text-gray-600 mt-2">
-            {isEditing ? 'Update booking details and send updates to customer' : 'Create a new booking reservation'}
+            {isEditing ? 'Update booking details' : 'Create a new booking reservation'}
           </p>
         </div>
         <Link
@@ -347,7 +401,7 @@ const BookingEditor = () => {
                 Property *
               </label>
               <select
-                value={formData.property.id}
+                value={formData.propertyId}
                 onChange={handlePropertyChange}
                 required
                 disabled={properties.length === 0}
@@ -355,7 +409,7 @@ const BookingEditor = () => {
               >
                 <option value="">Select a property</option>
                 {properties.map(property => (
-                  <option key={property.id} value={property.id}>
+                  <option key={property.id || property._id} value={property.id || property._id}>
                     {property.title} - {property.location} ({formatCurrency(property.price)}/night)
                   </option>
                 ))}
@@ -371,7 +425,7 @@ const BookingEditor = () => {
               </label>
               <input
                 type="date"
-                value={formData.checkIn}
+                value={formData.checkIn ? formData.checkIn.split('T')[0] : ''}
                 onChange={(e) => handleDateChange('checkIn', e.target.value)}
                 required
                 min={new Date().toISOString().split('T')[0]}
@@ -385,7 +439,7 @@ const BookingEditor = () => {
               </label>
               <input
                 type="date"
-                value={formData.checkOut}
+                value={formData.checkOut ? formData.checkOut.split('T')[0] : ''}
                 onChange={(e) => handleDateChange('checkOut', e.target.value)}
                 required
                 min={formData.checkIn || new Date().toISOString().split('T')[0]}
@@ -393,19 +447,36 @@ const BookingEditor = () => {
               />
             </div>
 
+            {/* Thay thế Number of Guests bằng Adults và Children */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Number of Guests *
+                Adults *
               </label>
               <input
                 type="number"
-                value={formData.guests}
-                onChange={handleGuestsChange}
+                value={formData.adults}
+                onChange={handleAdultsChange}
                 required
                 min="1"
                 max="20"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              <p className="text-xs text-gray-500 mt-1">Age 13+</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Children
+              </label>
+              <input
+                type="number"
+                value={formData.children}
+                onChange={handleChildrenChange}
+                min="0"
+                max="10"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Age 0-12</p>
             </div>
 
             {/* Availability Status */}
@@ -560,11 +631,11 @@ const BookingEditor = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Property:</span>
-                  <span className="font-medium">{formData.property.title || 'Not selected'}</span>
+                  <span className="font-medium">{selectedProperty?.title || 'Not selected'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Location:</span>
-                  <span className="font-medium">{formData.property.location || 'Not available'}</span>
+                  <span className="font-medium">{selectedProperty?.location || 'Not available'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Check-in:</span>
@@ -578,19 +649,28 @@ const BookingEditor = () => {
                   <span className="text-gray-600">Nights:</span>
                   <span className="font-medium">{calculateNights()}</span>
                 </div>
+                {/* Cập nhật hiển thị Guests */}
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Guests:</span>
-                  <span className="font-medium">{formData.guests}</span>
+                  <span className="text-gray-600">Adults:</span>
+                  <span className="font-medium">{formData.adults}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Children:</span>
+                  <span className="font-medium">{formData.children}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Guests:</span>
+                  <span className="font-medium">{formData.adults + formData.children}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Price per night:</span>
-                  <span className="font-medium">{formatCurrency(formData.property.price)}</span>
+                  <span className="font-medium">{formatCurrency(selectedProperty?.price)}</span>
                 </div>
                 <div className="border-t pt-2 mt-2">
                   <div className="flex justify-between text-base font-semibold">
                     <span>Total Amount:</span>
                     <span className="text-blue-600">
-                      {formatCurrency(calculateNights() * (formData.property.price || 0))}
+                      {formatCurrency(formData.totalAmount)}
                     </span>
                   </div>
                 </div>
@@ -629,7 +709,7 @@ const BookingEditor = () => {
               <button
                 type="button"
                 onClick={handleSendEmail}
-                disabled={sendingEmail || !formData.customer.email || !id}
+                disabled={sendingEmail || !formData.customer.email || !bookingId}
                 className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-6 py-2 rounded-lg transition-colors font-medium flex items-center"
               >
                 {sendingEmail ? (

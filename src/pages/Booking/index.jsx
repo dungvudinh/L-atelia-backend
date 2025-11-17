@@ -449,8 +449,14 @@ const BookingList = () => {
                         <span className="font-medium">{calculateNights(booking.checkIn, booking.checkOut)}</span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className="text-gray-600">Guests:</span>
-                        <span className="font-medium">{booking.guests || 0}</span>
+                        <span className="text-gray-600">Adults:</span>
+                        <span className="font-medium">{booking.adults || 0}</span>
+                       
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-600">Children:</span>
+                        <span className="font-medium">{booking.children || 0}</span>
+                       
                       </div>
                       {booking.specialRequests && (
                         <div className="mt-2">
@@ -475,7 +481,7 @@ const BookingList = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
                       <Link
-                        to={`/bookings/edit/${booking.id}`}
+                        to={`/bookings/edit/${booking._id}`}
                         className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
                         title="Edit Booking"
                       >
@@ -484,7 +490,7 @@ const BookingList = () => {
                         </svg>
                       </Link>
                       <button
-                        onClick={() => handleDelete(booking.id)}
+                        onClick={() => handleDelete(booking._id)}
                         className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50"
                         title="Delete Booking"
                       >

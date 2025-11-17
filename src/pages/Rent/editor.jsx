@@ -14,7 +14,8 @@ const RentEditor = () => {
     location: '',
     price: '',
     priceUnit: 'per night',
-    beds: '',
+    adultBeds: '', // Thay beds thành adultBeds
+    childBeds: '', // Thêm childBeds
     bedrooms: '',
     bathrooms: '',
     description: '',
@@ -680,19 +681,33 @@ console.log(formData)
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Beds
+                  Adult Beds
                 </label>
                 <input
                   type="number"
-                  name="beds"
-                  value={formData.beds}
+                  name="adultBeds"
+                  value={formData.adultBeds}
                   onChange={handleInputChange}
                   min="0"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Child Beds
+                </label>
+                <input
+                  type="number"
+                  name="childBeds"
+                  value={formData.childBeds}
+                  onChange={handleInputChange}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="1"
                 />
               </div>
               <div>

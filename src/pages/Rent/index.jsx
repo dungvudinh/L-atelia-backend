@@ -342,7 +342,7 @@ const RentList = () => {
                     checked={selectedItems.length === rentals.length && rentals.length > 0}
                   />
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
                   Property
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -379,9 +379,9 @@ const RentList = () => {
                       onChange={() => handleSelectItem(rental._id)}
                     />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                  <td className="px-4 py-4">
+                    <div className="flex items-center min-w-0"> {/* Thêm min-w-0 để cho phép truncate */}
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
                         <img 
                           src={getThumbnailUrl(rental)} 
                           alt={rental.title}
@@ -391,49 +391,52 @@ const RentList = () => {
                           }}
                         />
                       </div>
-                      <div className="ml-4">
-                        <div className="flex items-center space-x-2">
-                          <h4 className="text-sm font-semibold text-gray-900">
+                      <div className="ml-3 min-w-0 flex-1"> {/* Thêm min-w-0 và flex-1 */}
+                        <div className="flex items-center space-x-1">
+                          <h4 className="text-sm font-semibold text-gray-900 truncate" title={rental.title}>
                             {rental.title}
                           </h4>
                           {getFeaturedBadge(rental.featured)}
                         </div>
-                        <p className="text-sm text-gray-500 line-clamp-1 mt-1">
-                          {rental.descriptionShort || rental.description?.substring(0, 50) + '...'}
+                        <p className="text-xs text-gray-500 truncate mt-0.5" title={rental.descriptionShort || rental.description}>
+                          {rental.descriptionShort || (rental.description ? rental.description.substring(0, 40) + '...' : 'No description')}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{rental.location}</span>
+                  <td className="px-4 py-4">
+                    <span className="text-sm text-gray-900 truncate block max-w-xs" title={rental.location}>
+                      {rental.location}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span className="text-sm font-semibold text-blue-600">
                       {formatPrice(rental.price, rental.priceUnit)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4">
                     <div className="text-sm text-gray-900 space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-600">Beds:</span>
-                        <span className="font-medium">{rental.beds || 0}</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-gray-600 text-xs">Adults:</span>
+                        <span className="font-medium text-xs">{rental.adultBeds || 0}</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-600">Bedrooms:</span>
-                        <span className="font-medium">{rental.bedrooms || 0}</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-gray-600 text-xs">Children:</span>
+                        <span className="font-medium text-xs">{rental.childBeds || 0}</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-600">Bathrooms:</span>
-                        <span className="font-medium">{rental.bathrooms || 0}</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-gray-600 text-xs">Bath:</span>
+                        <span className="font-medium text-xs">{rental.bathrooms || 0}</span>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(rental.createdAt)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     {getStatusBadge(rental.status)}
                   </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
                       <button
