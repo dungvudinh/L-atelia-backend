@@ -64,18 +64,15 @@ const RentEditor = () => {
   const [uploadProgress, setUploadProgress] = useState({});
 
   const amenitiesOptions = [
-    'Safety room',
-    'Safety unit location', 
-    'Safety user presence',
-    'District setting',
-    'Air conditioning',
-    'Parking',
-    'Restaurants',
     'Balcony',
-    'Swimming pool',
-    'WiFi',
+    'Air conditioning', 
+    'Parking',
+    'Fitness center',
     'Kitchen',
-    'TV'
+    'Family rooms',
+    'Non-smoking rooms',
+    'Wifi in all areas',
+    'Beachfront',
   ];
 
   // Icon mapping

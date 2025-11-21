@@ -1,5 +1,5 @@
 // components/BookingEditor.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import bookingService from '../../services/bookingService';
 import rentService from '../../services/rentService';
@@ -8,6 +8,7 @@ const BookingEditor = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(bookingId);
+  const originalDataRef = useRef(null);
   
   const [formData, setFormData] = useState({
     bookingNumber: '',
@@ -17,11 +18,11 @@ const BookingEditor = () => {
       phone: '',
       address: ''
     },
-    propertyId: '', // Sửa từ property.id thành propertyId để phù hợp với model
+    propertyId: '',
     checkIn: '',
     checkOut: '',
-    adults: 1, // Đổi từ guests sang adults
-    children: 0, // Thêm children
+    adults: 1,
+    children: 0,
     status: 'pending',
     paymentStatus: 'pending',
     specialRequests: '',
@@ -32,17 +33,19 @@ const BookingEditor = () => {
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [emailType, setEmailType] = useState('');
   const [properties, setProperties] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
-  const [availableProperties, setAvailableProperties] = useState([]); // Thêm state mới
+  const [availableProperties, setAvailableProperties] = useState([]);
+
   // Fetch properties từ database
   useEffect(() => {
     const fetchProperties = async () => {
       try {
         const propertiesData = await rentService.getAllRentals();
         const propertiesList = propertiesData.data || propertiesData;
-        setProperties(propertiesData.data || propertiesData);
+        setProperties(propertiesList);
         setAvailableProperties(propertiesList);
       } catch (error) {
         console.error('Error fetching properties:', error);
@@ -62,39 +65,25 @@ const BookingEditor = () => {
           const bookingData = await bookingService.getBookingById(bookingId);
           console.log('Booking data:', bookingData);
           
-          // Transform data để phù hợp với form state
-          // Giả sử bookingData có adults và children, nếu không sẽ dùng giá trị mặc định
+          const booking = bookingData.data || bookingData;
           const transformedData = {
-            ...bookingData.data || bookingData,
-            propertyId: bookingData.data?.propertyId?._id || bookingData.data?.propertyId || bookingData.propertyId,
-            adults: bookingData.data?.adults || 1,
-            children: bookingData.data?.children || 0
+            ...booking,
+            propertyId: booking.propertyId?._id || booking.propertyId,
+            adults: booking.adults || 1,
+            children: booking.children || 0,
+            customer: {
+              name: booking.customer?.name || '',
+              email: booking.customer?.email || '',
+              phone: booking.customer?.phone || '',
+              address: booking.customer?.address || ''
+            }
           };
           
           setFormData(transformedData);
+          originalDataRef.current = transformedData;
         } catch (error) {
           console.error('Error fetching booking data:', error);
-          // Fallback data cho demo
-          const mockData = {
-            bookingNumber: 'BK-001',
-            customer: {
-              name: 'John Smith',
-              email: 'john.smith@email.com',
-              phone: '+1234567890',
-              address: '123 Main St, New York, USA'
-            },
-            propertyId: '1',
-            checkIn: '2024-02-15',
-            checkOut: '2024-02-20',
-            adults: 2,
-            children: 1,
-            status: 'confirmed',
-            paymentStatus: 'paid',
-            specialRequests: 'Early check-in would be appreciated',
-            notes: 'Customer requested early check-in at 1 PM',
-            totalAmount: 2500
-          };
-          setFormData(mockData);
+          alert('Failed to load booking data: ' + error.message);
         } finally {
           setLoading(false);
         }
@@ -122,7 +111,7 @@ const BookingEditor = () => {
             propertyId, 
             checkIn, 
             checkOut,
-            isEditing ? bookingId : null // Exclude current booking khi edit
+            isEditing ? bookingId : null
           );
           
           return {
@@ -158,7 +147,6 @@ const BookingEditor = () => {
     } catch (error) {
       console.error('Error checking properties availability:', error);
       setAvailabilityError('Error checking properties availability');
-      // Fallback: hiển thị tất cả properties nếu có lỗi
       setAvailableProperties(properties);
     } finally {
       setAvailabilityLoading(false);
@@ -167,10 +155,22 @@ const BookingEditor = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    if (name.startsWith('customer.')) {
+      const customerField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        customer: {
+          ...prev.customer,
+          [customerField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handlePropertyChange = async (e) => {
@@ -181,7 +181,7 @@ const BookingEditor = () => {
       setFormData(prev => ({
         ...prev,
         propertyId: selectedProperty.id || selectedProperty._id,
-        totalAmount: prev.totalAmount // Giữ nguyên totalAmount, sẽ tính lại khi save
+        totalAmount: calculateTotalAmount(selectedProperty.price, prev.checkIn, prev.checkOut)
       }));
 
       // Check availability nếu đã có dates
@@ -208,6 +208,17 @@ const BookingEditor = () => {
     
     setFormData(updatedFormData);
 
+    // Tính lại total amount khi dates thay đổi
+    if (selectedProperty && (field === 'checkIn' || field === 'checkOut')) {
+      const checkIn = field === 'checkIn' ? value : formData.checkIn;
+      const checkOut = field === 'checkOut' ? value : formData.checkOut;
+      
+      if (checkIn && checkOut) {
+        const totalAmount = calculateTotalAmount(selectedProperty.price, checkIn, checkOut);
+        setFormData(prev => ({ ...prev, totalAmount }));
+      }
+    }
+
     // Check availability cho tất cả properties khi dates thay đổi
     if (((field === 'checkIn' && updatedFormData.checkOut) || 
          (field === 'checkOut' && updatedFormData.checkIn))) {
@@ -218,18 +229,16 @@ const BookingEditor = () => {
       if (checkIn && checkOut && checkIn < checkOut) {
         await checkAllPropertiesAvailability(checkIn, checkOut);
       } else {
-        // Nếu dates không hợp lệ, hiển thị tất cả properties
         setAvailableProperties(properties);
       }
     }
   };
 
-  // Thay thế handleGuestsChange bằng các hàm mới
   const handleAdultsChange = (e) => {
     const value = parseInt(e.target.value) || 1;
     setFormData(prev => ({
       ...prev,
-      adults: Math.max(1, value) // Đảm bảo ít nhất 1 người lớn
+      adults: Math.max(1, value)
     }));
   };
 
@@ -237,7 +246,7 @@ const BookingEditor = () => {
     const value = parseInt(e.target.value) || 0;
     setFormData(prev => ({
       ...prev,
-      children: Math.max(0, value) // Đảm bảo không âm
+      children: Math.max(0, value)
     }));
   };
 
@@ -265,6 +274,21 @@ const BookingEditor = () => {
     }
   };
 
+  // Tính tổng amount
+  const calculateTotalAmount = (pricePerNight, checkIn, checkOut) => {
+    if (!pricePerNight || !checkIn || !checkOut) return 0;
+    const nights = calculateNights(checkIn, checkOut);
+    return nights * pricePerNight;
+  };
+
+  const calculateNights = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return 0;
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    return nights > 0 ? nights : 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -280,10 +304,9 @@ const BookingEditor = () => {
       return;
     }
 
-    // Validate total guests (tùy chọn)
-    const totalGuests = formData.adults + formData.children;
-    if (totalGuests < 1) {
-      alert('There must be at least 1 guest');
+    // Validate customer information
+    if (!formData.customer.name || !formData.customer.email || !formData.customer.phone) {
+      alert('Please fill in all customer information');
       return;
     }
 
@@ -318,18 +341,42 @@ const BookingEditor = () => {
     }
   };
 
-  // Hàm gửi email - TẠM THỜI VÔ HIỆU HÓA
-  const handleSendEmail = async () => {
-    alert('Email sending feature is temporarily disabled');
-    return;
-  };
+  // Hàm gửi email
+  const handleSendEmail = async (type = 'update') => {
+    try {
+      setSendingEmail(true);
+      setEmailType(type);
+      setEmailSent(false);
 
-  const calculateNights = () => {
-    if (!formData.checkIn || !formData.checkOut) return 0;
-    const start = new Date(formData.checkIn);
-    const end = new Date(formData.checkOut);
-    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    return nights > 0 ? nights : 0;
+      // Collect changes for update email
+      const changes = [];
+      if (originalDataRef.current) {
+        if (formData.status !== originalDataRef.current.status) {
+          changes.push(`Status changed from ${originalDataRef.current.status} to ${formData.status}`);
+        }
+        if (formData.paymentStatus !== originalDataRef.current.paymentStatus) {
+          changes.push(`Payment status changed from ${originalDataRef.current.paymentStatus} to ${formData.paymentStatus}`);
+        }
+        if (formData.checkIn !== originalDataRef.current.checkIn) {
+          changes.push(`Check-in date changed to ${new Date(formData.checkIn).toLocaleDateString()}`);
+        }
+        if (formData.checkOut !== originalDataRef.current.checkOut) {
+          changes.push(`Check-out date changed to ${new Date(formData.checkOut).toLocaleDateString()}`);
+        }
+      }
+
+      await bookingService.sendBookingEmail(bookingId, type, changes);
+      
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 5000);
+      
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert(error.message || 'Failed to send email');
+    } finally {
+      setSendingEmail(false);
+      setEmailType('');
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -345,11 +392,14 @@ const BookingEditor = () => {
     p.id === formData.propertyId || p._id === formData.propertyId
   );
 
+  const nights = calculateNights(formData.checkIn, formData.checkOut);
+
   if (loading && isEditing) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="ml-4 text-gray-600">Loading booking data...</p>
         </div>
       </div>
     );
@@ -447,7 +497,6 @@ const BookingEditor = () => {
               />
             </div>
 
-            {/* Thay thế Number of Guests bằng Adults và Children */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Adults *
@@ -492,48 +541,59 @@ const BookingEditor = () => {
                   {availabilityError}
                 </div>
               )}
+              {availableProperties.length > 0 && !availabilityLoading && (
+                <div className="text-green-600 text-sm">
+                  {availableProperties.length} properties available for selected dates
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Customer Information - READ ONLY */}
+        {/* Customer Information - EDITABLE */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Customer Information</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
+                Full Name *
               </label>
               <input
                 type="text"
+                name="customer.name"
                 value={formData.customer.name}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                Email *
               </label>
               <input
                 type="email"
+                name="customer.email"
                 value={formData.customer.email}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone
+                Phone *
               </label>
               <input
                 type="tel"
+                name="customer.phone"
                 value={formData.customer.phone}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -542,10 +602,12 @@ const BookingEditor = () => {
                 Address
               </label>
               <textarea
+                name="customer.address"
                 value={formData.customer.address}
-                readOnly
+                onChange={handleInputChange}
                 rows="2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Customer's address (optional)"
               />
             </div>
           </div>
@@ -639,17 +701,20 @@ const BookingEditor = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Check-in:</span>
-                  <span className="font-medium">{formData.checkIn || 'Not set'}</span>
+                  <span className="font-medium">
+                    {formData.checkIn ? new Date(formData.checkIn).toLocaleDateString() : 'Not set'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Check-out:</span>
-                  <span className="font-medium">{formData.checkOut || 'Not set'}</span>
+                  <span className="font-medium">
+                    {formData.checkOut ? new Date(formData.checkOut).toLocaleDateString() : 'Not set'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Nights:</span>
-                  <span className="font-medium">{calculateNights()}</span>
+                  <span className="font-medium">{nights}</span>
                 </div>
-                {/* Cập nhật hiển thị Guests */}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Adults:</span>
                   <span className="font-medium">{formData.adults}</span>
@@ -705,27 +770,73 @@ const BookingEditor = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 sm:space-x-4 mt-8 pt-6 border-t border-gray-200">
-            <div className="flex space-x-3">
-              <button
-                type="button"
-                onClick={handleSendEmail}
-                disabled={sendingEmail || !formData.customer.email || !bookingId}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-6 py-2 rounded-lg transition-colors font-medium flex items-center"
-              >
-                {sendingEmail ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Send Update Email
-                  </>
-                )}
-              </button>
+            <div className="flex flex-wrap gap-3">
+              {isEditing && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleSendEmail('confirmation')}
+                    disabled={sendingEmail || !formData.customer.email}
+                    className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-lg transition-colors font-medium flex items-center text-sm"
+                  >
+                    {sendingEmail && emailType === 'confirmation' ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Send Confirmation
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendEmail('update')}
+                    disabled={sendingEmail || !formData.customer.email}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg transition-colors font-medium flex items-center text-sm"
+                  >
+                    {sendingEmail && emailType === 'update' ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Send Update
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendEmail('cancellation')}
+                    disabled={sendingEmail || !formData.customer.email || formData.status !== 'cancelled'}
+                    className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-2 rounded-lg transition-colors font-medium flex items-center text-sm"
+                  >
+                    {sendingEmail && emailType === 'cancellation' ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Send Cancellation
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
               
               {emailSent && (
                 <span className="text-green-600 text-sm font-medium flex items-center">

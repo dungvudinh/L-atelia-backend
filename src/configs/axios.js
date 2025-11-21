@@ -1,10 +1,12 @@
 // src/utils/axiosClient.js
 import axios from 'axios'
 import { API_ROOT } from '../utils/constants'
+
 // console.log( process.env.REACT_APP_API_URL)
 const API_BASE_URL = 'https://l-atelia-api.onrender.com'
 // const API_BASE_URL = 'http://localhost:3000'
 console.log(API_BASE_URL)
+
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -27,18 +29,21 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response Interceptor - SỬA QUAN TRỌNG
+// Response Interceptor - ĐÃ SỬA LỖI
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status;
+    const message = error.response?.data?.message || error.message;
+    
     console.log('🔴 Axios Error:', {
-      status: error.response?.status,
-      data: error.response?.data,
+      status: status,
+      message: message,
       url: error.config?.url
     })
 
-    // CHỈ redirect nếu KHÔNG phải login request và đang ở trang khác login
-    if (error.response?.status === 401) {
+    // Xử lý lỗi 401 - Unauthorized
+    if (status === 401) {
       const isLoginRequest = error.config?.url?.includes('/auth/login')
       const isLoginPage = window.location.pathname === '/login'
       
@@ -59,7 +64,9 @@ axiosClient.interceptors.response.use(
         localStorage.removeItem('user')
       }
     }
-    if (status === 403 || message.includes('access denied') || message.includes('forbidden')) {
+    
+    // Xử lý lỗi 403 - Forbidden
+    if (status === 403 || message?.includes('access denied') || message?.includes('forbidden')) {
       console.log('🚫 Access denied detected, redirecting...')
       
       // Chỉ redirect nếu chưa ở trang access-denied
@@ -69,10 +76,10 @@ axiosClient.interceptors.response.use(
         return Promise.reject(new Error('Access denied'))
       }
     }
+    
     // Throw error để component xử lý
-    const serverMessage = error.response?.data?.message
-    if (serverMessage) {
-      return Promise.reject(new Error(serverMessage))
+    if (message) {
+      return Promise.reject(new Error(message))
     }
     
     return Promise.reject(error)

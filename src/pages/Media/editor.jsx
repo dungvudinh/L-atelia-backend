@@ -180,28 +180,48 @@ const MediaEditor = () => {
                   Nội dung *
                 </label>
                 <Editor
-                  apiKey="e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez"
-                  onInit={(evt, editor) => editorRef.current = editor}
-                  value={formData.content}
-                  onEditorChange={handleEditorChange}
-                  init={{
-                    height: 500,
-                    menubar: 'file edit view insert format tools table',
-                    plugins: [
-                      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                      'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
-                    ],
-                    toolbar: 'undo redo | blocks | bold italic forecolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image media | code',
-                    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
-                    file_picker_types: 'image media',
-                    file_picker_callback: (callback, value, meta) => {
-                      if (meta.filetype === 'image') {
-                        setShowMediaManager(true);
-                      }
-                    }
-                  }}
-                />
+  apiKey="e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez"
+  onInit={(evt, editor) => editorRef.current = editor}
+  value={formData.content}
+  onEditorChange={handleEditorChange}
+  init={{
+    height: 500,
+    menubar: 'file edit view insert format tools table',
+    plugins: [
+      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+      'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
+    ],
+    font_family_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Nunito Sans=nunito sans;Cormorant Infant=cormorant infant,sans-serif',
+    toolbar: 'undo redo | blocks fontfamily | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image media | code', // Added backcolor if desired
+    content_style: `
+      @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300..700;1,300..700&display=swap');
+      body { font-family: Nunito Sans, sans-serif; }
+    `,
+    color_map: [
+      '#F3EEE7', 'BG Primary',    // --color-bg-primary
+      '#404040', 'TXT Primary',    // --color-txt-primary
+      '#2F5855', 'TXT Secondary',  // --color-txt-secondary
+      '#434343', 'TXT Gray',       // --color-txt-gray
+      '#344D3B', 'BG Secondary',   // --color-bg-secondary
+      '#D9D9D9', 'Dot',            // --color-dot
+      // Add more defaults if needed, e.g.:
+      '#000000', 'Black',
+      '#FFFFFF', 'White',
+      '#FF0000', 'Red'
+    ],
+    color_cols: 3,  // Optional: Number of columns in the color grid (default is 10)
+    color_default_foreground: '#404040',  // Optional: Default text color (your --color-txt-primary)
+    color_default_background: '#F3EEE7',  // Optional: Default background color (your --color-bg-primary)
+    file_picker_types: 'image media',
+    file_picker_callback: (callback, value, meta) => {
+      if (meta.filetype === 'image') {
+        setShowMediaManager(true);
+      }
+    }
+  }}
+/>
                 <button
                   type="button"
                   onClick={() => setShowMediaManager(true)}
