@@ -77,7 +77,10 @@ const MediaEditor = () => {
       // Lưu đường dẫn vào formData
       setFormData(prev => ({
         ...prev,
-        featuredImage: response.data.url // Lưu đường dẫn tương đối
+        featuredImage: {
+          url: response.data.url, 
+          key: response.data.key
+        }
       }));
       
     } catch (error) {
@@ -91,13 +94,14 @@ const MediaEditor = () => {
     if (!formData.featuredImage) return;
     try {
       // Lấy filename từ đường dẫn
-      const imageInfo = {
-        imageUrl: formData.featuredImage,  // URL đầy đủ (cho Cloudinary)
-        filename: formData.featuredImage.split('/').pop() // Tên file (cho local)
-      };
+      console.log(formData)
+      // const imageInfo = {
+      //   imageUrl: formData.featuredImage,  // URL đầy đủ (cho Cloudinary)
+      //   // filename: formData.featuredImage.split('/').pop() // Tên file (cho local)
+      // };
       
       // Gọi API xóa file
-      await mediaService.deleteFeaturedImage(imageInfo);
+      await mediaService.deleteFeaturedImage(formData.featuredImage.key);
       
       // Xóa khỏi form data
       setFormData(prev => ({
@@ -314,10 +318,10 @@ const MediaEditor = () => {
                 {formData.featuredImage ? (
                   <div className="space-y-3">
                     <img 
-                      src={getImageUrl(formData.featuredImage)} 
+                      src={getImageUrl(formData.featuredImage.url)} 
                       alt="Featured" 
                       className="w-full h-48 object-cover rounded-lg"
-                      crossOrigin="anonymous"
+                      
                     />
                     <button
                       type="button"
@@ -551,7 +555,6 @@ const MediaManager = ({ onClose, editorRef }) => {
 
   const handleDeleteImage = async (imageId, event) => {
     event?.stopPropagation();
-    
     if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
       return;
     }
@@ -586,7 +589,7 @@ const MediaManager = ({ onClose, editorRef }) => {
       editor.execCommand('mceInsertContent', false, `
         <img 
           src="${imageUrl}" 
-          crossOrigin="anonymous"
+          
           alt="${image.originalName}" 
           style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;"
           data-image-id="${image._id}"
@@ -632,7 +635,6 @@ const MediaManager = ({ onClose, editorRef }) => {
           <img
             src={imgError ? '/images/placeholder.jpg' : getImageUrl(image.url)}
             alt={image.originalName}
-            crossOrigin="anonymous"
             className="w-full h-full object-cover"
             onError={handleImageError}
             onLoad={handleImageLoad}
@@ -659,7 +661,7 @@ const MediaManager = ({ onClose, editorRef }) => {
 
         <div className="p-2">
           <p className="text-xs font-medium text-gray-900 truncate mb-1">
-            {image.originalName}
+            {image.filename}
           </p>
           <p className="text-xs text-gray-500">
             {image.size ? `${(image.size / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}

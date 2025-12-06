@@ -111,14 +111,15 @@ export const mediaService = {
   },
 
   // Delete featured image
-  deleteFeaturedImage: async (imageInfo) => {
+  deleteFeaturedImage: async (imageKey) => {
     try {
-      console.log(`🗑️ Deleting featured image: ${imageInfo}`);
+      // console.log(`🗑️ Deleting featured image: ${imageInfo}`);
       
       const response = await axiosClient.delete(`/v1/media/delete-featured-image`, {
         data:{
-          imageUrl: imageInfo.imageUrl, 
-          filename:imageInfo.filename
+          key: imageKey
+          // imageUrl: imageInfo.imageUrl, 
+          // filename:imageInfo.filename
         }
       });
       console.log('✅ Featured image deleted successfully');

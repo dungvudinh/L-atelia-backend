@@ -619,7 +619,7 @@ export default function Editor() {
             <h2 className="text-xl font-semibold mb-4">Ảnh chính (Hero)</h2>
             {project.heroImage ? (
               <div className="relative">
-                <img src={getImageUrl(project.heroImage)} alt="Hero" className="w-full h-80 object-cover rounded-lg" crossOrigin="anonymous" />
+                <img src={getImageUrl(project.heroImage)} alt="Hero" className="w-full h-80 object-cover rounded-lg"  />
                 <button type="button" onClick={() => removeImage('hero')} className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full">
                   <X className="w-5 h-5" />
                 </button>
@@ -639,7 +639,7 @@ export default function Editor() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {galleryPreview.map((img, i) => (
                 <div key={i} className="relative group">
-                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
+                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" />
                   <button type="button" onClick={() => removeImage('gallery', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -927,7 +927,7 @@ export default function Editor() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {progressPreview.map((img, i) => (
                 <div key={i} className="relative group">
-                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
+                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" />
                   <button type="button" onClick={() => removeImage('progress', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -944,7 +944,7 @@ export default function Editor() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {designPreview.map((img, i) => (
                 <div key={i} className="relative group">
-                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" crossOrigin="anonymous"/>
+                  <img src={getImageUrl(img)} alt="" className="w-full h-40 object-cover rounded-lg" />
                   <button type="button" onClick={() => removeImage('design', i)} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -965,7 +965,7 @@ export default function Editor() {
                     <div key={index} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
                       <div className="flex items-center gap-3 flex-1">
                         {brochure.type.startsWith('image/') ? (
-                          <img src={getImageUrl(brochure.url)} alt="Brochure" className="w-16 h-16 object-cover rounded" crossOrigin="anonymous"/>
+                          <img src={getImageUrl(brochure.url)} alt="Brochure" className="w-16 h-16 object-cover rounded" />
                         ) : (
                           <FileText className="w-10 h-10 text-blue-600" />
                         )}

@@ -65,7 +65,6 @@ const Media = () => {
         <img 
           src={imageUrl} 
           alt={mediaItem.title}
-          crossOrigin="anonymous"
           className="w-full h-full object-cover"
           onError={(e) => {
             console.error('Image failed to load:', imageUrl);
