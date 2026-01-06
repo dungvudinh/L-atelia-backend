@@ -3,8 +3,8 @@ import axios from 'axios'
 import { API_ROOT } from '../utils/constants'
 
 // console.log( process.env.REACT_APP_API_URL)
-const API_BASE_URL = 'https://l-atelia-api.onrender.com'
-// const API_BASE_URL = 'http://localhost:3000'
+// const API_BASE_URL = 'https://l-atelia-api.onrender.com'
+const API_BASE_URL = 'https://l-atelia-api-yct5.onrender.com'
 console.log(API_BASE_URL)
 
 const axiosClient = axios.create({
