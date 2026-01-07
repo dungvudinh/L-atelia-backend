@@ -72,7 +72,13 @@ export default function Editor() {
     designImages: [],
     brochure: []
   });
-
+  const [originalImages, setOriginalImages] = useState({
+    heroImage: null,
+    gallery: [],
+    constructionProgress: [],
+    designImages: [],
+    brochure: []
+  });
   useEffect(() => {
     if (projectId) loadProject(projectId);
   }, [projectId]);
@@ -83,8 +89,14 @@ export default function Editor() {
       const res = await projectService.getProjectById(id);
       const p = res.data;
       
-      console.log('Loaded project data:', p);
-
+        console.log('Loaded project data:', p);
+        setOriginalImages({
+          heroImage: p.heroImage,
+          gallery: p.gallery || [],
+          constructionProgress: p.constructionProgress || [],
+          designImages: p.designImages || [],
+          brochure: p.brochure || []
+        });
       // Hàm extract URL từ image object {url, uploaded_at} hoặc string (backward compatibility)
       const extractUrl = (imageData) => {
         if (!imageData) return '';
@@ -230,33 +242,53 @@ export default function Editor() {
   };
 
   // Remove image
-  const removeImage = (type, index = null) => {
-    if (type === 'hero') {
-      setProject(p => ({ ...p, heroImage: '' }));
-      setFileObjects(prev => ({ ...prev, heroImage: null }));
-    } else {
-      const typeMap = {
-        gallery: ['gallery', galleryPreview, 'gallery'],
-        progress: ['constructionProgress', progressPreview, 'constructionProgress'],
-        design: ['designImages', designPreview, 'designImages'],
-        brochure: ['brochure', brochurePreview, 'brochure']
-      };
+  // Sửa hàm removeImage
+// Sửa hàm removeImage
+const removeImage = (type, index = null) => {
+  if (type === 'hero') {
+    setProject(p => ({ ...p, heroImage: '' }));
+    setFileObjects(prev => ({ ...prev, heroImage: null }));
+  } else {
+    const typeMap = {
+      gallery: ['gallery', galleryPreview, 'gallery'],
+      progress: ['constructionProgress', progressPreview, 'constructionProgress'],
+      design: ['designImages', designPreview, 'designImages'],
+      brochure: ['brochure', brochurePreview, 'brochure']
+    };
 
-      const [projectKey, previewState, fileKey] = typeMap[type];
-      
-      const newProjectArray = project[projectKey].filter((_, i) => i !== index);
-      const newPreview = previewState.filter((_, i) => i !== index);
-      const newFiles = fileObjects[fileKey].filter((_, i) => i !== index);
-      
-      setProject(p => ({ ...p, [projectKey]: newProjectArray }));
-      if (type === 'gallery') setGalleryPreview(newPreview);
-      if (type === 'progress') setProgressPreview(newPreview);
-      if (type === 'design') setDesignPreview(newPreview);
-      if (type === 'brochure') setBrochurePreview(newPreview);
-      
-      setFileObjects(prev => ({ ...prev, [fileKey]: newFiles }));
+    const [projectKey, previewState, fileKey] = typeMap[type];
+    
+    // Tạo bản sao mới của các array
+    const newProjectArray = [...project[projectKey]];
+    const newPreview = [...previewState];
+    const newFiles = [...fileObjects[fileKey]];
+    
+    // Lấy item bị xóa để revoke blob URL (tránh memory leak)
+    const removedItem = newProjectArray[index];
+    if (removedItem) {
+      const url = typeof removedItem === 'string' ? removedItem : removedItem.url;
+      if (url && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
     }
-  };
+    
+    // Xóa phần tử tại index
+    newProjectArray.splice(index, 1);
+    newPreview.splice(index, 1);
+    newFiles.splice(index, 1);
+    
+    // Cập nhật state
+    setProject(p => ({ ...p, [projectKey]: newProjectArray }));
+    
+    // Cập nhật preview state tương ứng
+    if (type === 'gallery') setGalleryPreview(newPreview);
+    if (type === 'progress') setProgressPreview(newPreview);
+    if (type === 'design') setDesignPreview(newPreview);
+    if (type === 'brochure') setBrochurePreview(newPreview);
+    
+    setFileObjects(prev => ({ ...prev, [fileKey]: newFiles }));
+  }
+};
 
   // Property Features Functions
   const addPropertyFeature = () => {
@@ -409,52 +441,177 @@ export default function Editor() {
       )
     }));
   };
-
+  // Trong component Editor
+const findDeletedImages = (originalArray, currentArray) => {
+  if (!originalArray || originalArray.length === 0) return [];
+  
+  // Extract URLs từ cả original và current
+  const extractUrls = (arr) => {
+    return arr.map(item => {
+      if (!item) return '';
+      if (typeof item === 'object' && item.url) {
+        return item.url;
+      }
+      if (typeof item === 'string') {
+        return item;
+      }
+      return '';
+    }).filter(url => url && url.trim() !== '');
+  };
+  
+  const originalUrls = extractUrls(originalArray);
+  const currentUrls = extractUrls(currentArray);
+  
+  console.log('=== DEBUG: FIND DELETED IMAGES ===');
+  console.log('Original URLs count:', originalUrls.length);
+  console.log('Current URLs count:', currentUrls.length);
+  
+  // Tìm URLs có trong original nhưng không có trong current
+  const deleted = originalUrls.filter(url => !currentUrls.includes(url));
+  console.log('Deleted URLs found:', deleted.length);
+  
+  return deleted;
+};
   // Prepare form data for API call
   const prepareFormData = () => {
     try {
       const formData = new FormData();
       
-      // Prepare text data với cấu trúc mới
-      const textData = {
-        title: project.title,
-        description: project.description,
-        status: project.status,
-        location: project.location,
-        propertyFeatures: project.propertyFeatures,
-        specifications: project.specifications,
-        propertyHighlights: project.propertyHighlights,
-        specialSections: project.specialSections
+      // Tìm ảnh đã bị xóa cho TẤT CẢ các loại
+      const deletedImages = {
+        gallery: findDeletedImages(originalImages.gallery, project.gallery),
+        constructionProgress: findDeletedImages(originalImages.constructionProgress, project.constructionProgress),
+        designImages: findDeletedImages(originalImages.designImages, project.designImages),
+        brochure: findDeletedImages(originalImages.brochure, project.brochure)
       };
       
-      console.log('Text data for form:', textData);
-      formData.append('data', JSON.stringify(textData));
+      // Nếu heroImage bị xóa
+      if (originalImages.heroImage && !project.heroImage) {
+        const heroUrl = typeof originalImages.heroImage === 'object' 
+          ? originalImages.heroImage.url 
+          : originalImages.heroImage;
+        if (heroUrl && heroUrl.trim() !== '') {
+          deletedImages.heroImage = heroUrl;
+        }
+      }
       
-      // Append files
+      // QUAN TRỌNG: Gửi đầy đủ tất cả danh sách ảnh HIỆN TẠI
+      const textData = {
+        title: project.title || '',
+        description: project.description || '',
+        status: project.status || 'draft',
+        location: project.location || '',
+        propertyFeatures: project.propertyFeatures || [],
+        specifications: project.specifications || [],
+        propertyHighlights: project.propertyHighlights || [],
+        specialSections: project.specialSections || getDefaultSpecialSections(),
+        
+        // Gửi danh sách ảnh HIỆN TẠI của TẤT CẢ các loại
+        gallery: project.gallery || [],
+        constructionProgress: project.constructionProgress || [],
+        designImages: project.designImages || [],
+        brochure: project.brochure || [],
+        heroImage: project.heroImage || '',
+        
+        // Gửi thông tin ảnh cần xóa của TẤT CẢ các loại
+        deletedImages: deletedImages
+      };
+      
+      console.log('=== DEBUG: CURRENT IMAGES DATA ===');
+      console.log('Gallery count:', textData.gallery.length);
+      console.log('Construction Progress count:', textData.constructionProgress.length);
+      console.log('Design Images count:', textData.designImages.length);
+      console.log('Brochure count:', textData.brochure.length);
+      
+      // DEBUG: Log deleted images
+      console.log('=== DEBUG: DELETED IMAGES ===');
+      Object.keys(deletedImages).forEach(key => {
+        if (Array.isArray(deletedImages[key]) && deletedImages[key].length > 0) {
+          console.log(`Deleted ${key}:`, deletedImages[key].length);
+        } else if (deletedImages[key]) {
+          console.log(`Deleted ${key}:`, deletedImages[key]);
+        }
+      });
+      
+      // Stringify với error handling
+      let jsonString;
+      try {
+        jsonString = JSON.stringify(textData, (key, value) => {
+          // Handle special cases
+          if (value === undefined) return null;
+          if (value === null) return null;
+          return value;
+        });
+        
+        console.log('✅ JSON is valid, length:', jsonString.length);
+      } catch (jsonError) {
+        console.error('❌ JSON stringify error:', jsonError);
+        // Simple fallback - chỉ gửi data cơ bản
+        const simpleData = {
+          title: textData.title,
+          description: textData.description,
+          status: textData.status,
+          location: textData.location,
+          gallery: textData.gallery,
+          constructionProgress: textData.constructionProgress,
+          designImages: textData.designImages,
+          brochure: textData.brochure,
+          heroImage: textData.heroImage,
+          deletedImages: textData.deletedImages
+        };
+        jsonString = JSON.stringify(simpleData);
+        console.log('✅ JSON fixed (simple version)');
+      }
+      
+      formData.append('data', jsonString);
+      
+      // Append NEW files only (files mới upload) cho TẤT CẢ loại
       if (fileObjects.heroImage) {
+        console.log('Adding NEW heroImage file:', fileObjects.heroImage.name);
         formData.append('heroImage', fileObjects.heroImage);
       }
       
-      fileObjects.gallery.forEach((file) => {
-        if (file) formData.append('gallery', file);
+      fileObjects.gallery.forEach((file, index) => {
+        if (file) {
+          console.log(`Adding NEW gallery file ${index}:`, file.name);
+          formData.append('gallery', file);
+        }
       });
       
-      fileObjects.constructionProgress.forEach((file) => {
-        if (file) formData.append('constructionProgress', file);
+      fileObjects.constructionProgress.forEach((file, index) => {
+        if (file) {
+          console.log(`Adding NEW constructionProgress file ${index}:`, file.name);
+          formData.append('constructionProgress', file);
+        }
       });
       
-      fileObjects.designImages.forEach((file) => {
-        if (file) formData.append('designImages', file);
+      fileObjects.designImages.forEach((file, index) => {
+        if (file) {
+          console.log(`Adding NEW designImages file ${index}:`, file.name);
+          formData.append('designImages', file);
+        }
       });
       
-      fileObjects.brochure.forEach((file) => {
-        if (file) formData.append('brochure', file);
+      fileObjects.brochure.forEach((file, index) => {
+        if (file) {
+          console.log(`Adding NEW brochure file ${index}:`, file.name);
+          formData.append('brochure', file);
+        }
       });
       
-      console.log('FormData prepared successfully');
+      // DEBUG: Count total new files
+      const totalNewFiles = 
+        (fileObjects.heroImage ? 1 : 0) +
+        fileObjects.gallery.length +
+        fileObjects.constructionProgress.length +
+        fileObjects.designImages.length +
+        fileObjects.brochure.length;
+      
+      console.log(`📁 Total new files to upload: ${totalNewFiles}`);
+      
       return formData;
     } catch (error) {
-      console.error('Error preparing FormData:', error);
+      console.error('❌ Error preparing FormData:', error);
       throw error;
     }
   };
@@ -491,36 +648,146 @@ export default function Editor() {
     setLoading(true);
     
     try {
+      // Validation 1: Tiêu đề và mô tả
       if (!project.title.trim() || !project.description.trim()) {
         alert('Vui lòng nhập tiêu đề và mô tả dự án');
         setLoading(false);
         return;
       }
-  
-      console.log('Preparing formData...');
-      const formData = prepareFormData();
       
+      // ========== QUAN TRỌNG: Validation 2 - HeroImage ==========
+      if (isEditMode) {
+        // Kiểm tra trong chế độ chỉnh sửa
+        console.log('=== HEROIMAGE VALIDATION ===');
+        console.log('Current heroImage:', project.heroImage);
+        console.log('Original heroImage:', originalImages.heroImage);
+        console.log('New heroImage file:', fileObjects.heroImage);
+        
+        // Nếu người dùng đã xóa ảnh hero (project.heroImage là rỗng)
+        // VÀ không có ảnh mới upload (fileObjects.heroImage là null)
+        // VÀ ban đầu có ảnh hero (originalImages.heroImage không null)
+        if (!project.heroImage && 
+            !fileObjects.heroImage && 
+            originalImages.heroImage) {
+          alert('⚠️ Vui lòng chọn ảnh chính (Hero Image) mới!\n\nBạn đã xóa ảnh hero cũ, vui lòng tải lên ảnh hero mới để tiếp tục.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Kiểm tra trong chế độ tạo mới
+        if (!project.heroImage && !fileObjects.heroImage) {
+          alert('⚠️ Vui lòng chọn ảnh chính (Hero Image)!\n\nẢnh hero là bắt buộc để tạo dự án mới.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Validation 3: Đảm bảo có ít nhất một ảnh hero (cũ hoặc mới)
+      const hasHeroImage = project.heroImage || fileObjects.heroImage;
+      if (!hasHeroImage) {
+        alert('❌ Lỗi: Dự án phải có ít nhất một ảnh chính (Hero Image)');
+        setLoading(false);
+        return;
+      }
+    
+      console.log('=== START SUBMIT PROCESS ===');
+      console.log('Project ID:', projectId);
+      console.log('Is edit mode:', isEditMode);
+      
+      let formData;
+      try {
+        formData = prepareFormData();
+        console.log('✅ FormData created');
+      } catch (formDataError) {
+        console.error('❌ FormData creation failed:', formDataError);
+        alert('Lỗi khi chuẩn bị dữ liệu: ' + formDataError.message);
+        setLoading(false);
+        return;
+      }
+    
       if (!formData) {
-        console.error('formData is null or undefined');
+        console.error('❌ formData is null or undefined');
         alert('Lỗi khi chuẩn bị dữ liệu form');
         setLoading(false);
         return;
       }
-  
-      if (isEditMode) {
-        console.log('Updating project...');
-        await projectService.updateProject(projectId, formData);
-        alert('Cập nhật thành công');
-      } else {
-        console.log('Creating project...');
-        await projectService.createProject(formData);
-        alert('Tạo dự án thành công');
+    
+      // DEBUG: Kiểm tra cuối cùng trước khi gửi
+      console.log('=== FINAL CHECK BEFORE API CALL ===');
+      let dataFieldExists = false;
+      for (let [key, value] of formData.entries()) {
+        if (key === 'data') {
+          dataFieldExists = true;
+          try {
+            const parsed = JSON.parse(value);
+            console.log('✅ data field is valid JSON');
+            console.log('Parsed data sample:', {
+              title: parsed.title,
+              descriptionLength: parsed.description?.length,
+              features: parsed.propertyFeatures?.length,
+              highlights: parsed.propertyHighlights?.length,
+              heroImage: parsed.heroImage ? 'Has heroImage' : 'No heroImage'
+            });
+          } catch (parseError) {
+            console.error('❌ data field is NOT valid JSON');
+            console.error('Parse error:', parseError.message);
+            console.error('First 200 chars:', value.substring(0, 200));
+          }
+          break;
+        }
       }
-      navigate('/projects');
+      
+      if (!dataFieldExists) {
+        console.error('❌ No "data" field found in FormData!');
+        alert('Lỗi: Thiếu trường dữ liệu trong form');
+        setLoading(false);
+        return;
+      }
+    
+      if (isEditMode) {
+        console.log('🔄 Updating project...');
+        try {
+          const response = await projectService.updateProject(projectId, formData);
+          console.log('✅ Update successful:', response);
+          alert('Cập nhật thành công');
+          navigate('/projects');
+        } catch (updateError) {
+          console.error('❌ Update failed:', updateError);
+          console.error('Error response:', updateError.response?.data);
+          console.error('Error status:', updateError.response?.status);
+          throw updateError;
+        }
+      } else {
+        console.log('🆕 Creating project...');
+        try {
+          const response = await projectService.createProject(formData);
+          console.log('✅ Create successful:', response);
+          alert('Tạo dự án thành công');
+          navigate('/projects');
+        } catch (createError) {
+          console.error('❌ Create failed:', createError);
+          console.error('Error response:', createError.response?.data);
+          console.error('Error status:', createError.response?.status);
+          throw createError;
+        }
+      }
     } catch (err) {
-      console.error('Submit error:', err);
-      console.error('Error details:', err.response?.data || err.message);
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi lưu dự án');
+      console.error('=== SUBMIT ERROR DETAILS ===');
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
+      console.error('Error stack:', err.stack);
+      
+      // Hiển thị thông báo lỗi chi tiết
+      let errorMessage = 'Có lỗi xảy ra khi lưu dự án';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message.includes('JSON')) {
+        errorMessage = 'Lỗi định dạng dữ liệu JSON';
+      }
+      
+      alert(`Lỗi: ${errorMessage}\n\nVui lòng kiểm tra console để biết chi tiết.`);
     } finally {
       setLoading(false);
     }

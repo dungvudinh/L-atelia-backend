@@ -59,26 +59,55 @@ export const projectService = {
     }
   },
   // Update project với FormData
-  updateProject: async (id, formData) => {
-    try {
-      console.log('FormData for update:', formData);
-      
-      // DEBUG: Log entries
-      for (let [key, value] of formData.entries()) {
-        console.log(`Update formData entry: ${key} =`, value);
+  // services/projectService.js - Sửa hàm updateProject
+updateProject: async (id, formData) => {
+  try {
+    console.log('=== SERVICE: UPDATE PROJECT ===');
+    console.log('Project ID:', id);
+    
+    // DEBUG: Log FormData entries trong service
+    console.log('FormData entries in service:');
+    const entries = [];
+    for (let [key, value] of formData.entries()) {
+      if (key === 'data') {
+        entries.push(`${key}: JSON (length: ${value.length})`);
+        // Test parse trong service
+        try {
+          JSON.parse(value);
+          console.log('✅ JSON valid in service');
+        } catch (e) {
+          console.error('❌ JSON invalid in service:', e.message);
+          console.error('First 300 chars:', value.substring(0, 300));
+        }
+      } else if (value instanceof File) {
+        entries.push(`${key}: File - ${value.name} (${value.size} bytes)`);
+      } else {
+        entries.push(`${key}: ${value}`);
       }
-
-      const response = await axiosClient.put(`/v1/projects/${id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error in updateProject service:', error);
-      throw error;
     }
-  }, 
+    console.log('Entries:', entries);
+    
+    const response = await axiosClient.put(`/v1/projects/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    console.log('✅ Update successful in service');
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error in updateProject service:');
+    console.error('Error message:', error.message);
+    console.error('Response data:', error.response?.data);
+    console.error('Response status:', error.response?.status);
+    console.error('Response headers:', error.response?.headers);
+    
+    // Re-throw error với thông tin chi tiết
+    const serviceError = new Error(error.message || 'Update failed');
+    serviceError.response = error.response;
+    throw serviceError;
+  }
+}, 
   deleteProject: async (id) => {
     try {
       console.log(`🗑️ Deleting project with ID: ${id}`);
