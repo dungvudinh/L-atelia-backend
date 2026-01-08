@@ -40,34 +40,50 @@ const Media = () => {
   }, []);
 
   // Hàm xử lý hiển thị ảnh
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    
-    // Nếu là URL đầy đủ (http/https) hoặc data URL
-    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-      return imagePath;
-    }
-    
-    // Nếu là đường dẫn tương đối
-    const baseUrl = 'http://localhost:3000';
-    const normalizedPath = imagePath.replace(/\\/g, '/');
-    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
-    
-    return finalUrl;
-  };
+//   const getImageUrl = (imagePath) => {
+//   // ✅ Kiểm tra null/undefined đầu tiên
+//   if (!imagePath) {
+//     console.warn('⚠️ imagePath is null/undefined/empty');
+//     return null;
+//   }
+  
+//   console.log('Original image path:', imagePath);
+  
+//   // ✅ Kiểm tra kiểu dữ liệu
+//   if (typeof imagePath !== 'string') {
+//     console.warn('⚠️ imagePath is not a string:', typeof imagePath, imagePath);
+//     return null;
+//   }
+  
+//   // Nếu là URL đầy đủ (http/https) hoặc data URL
+//   if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+//     return imagePath;
+//   }
+  
+//   // Nếu là đường dẫn tương đối
+//   const baseUrl = 'http://localhost:3000';
+  
+//   // Xử lý đường dẫn Windows (có backslash)
+//   const normalizedPath = imagePath.replace(/\\/g, '/');
+  
+//   // Đảm bảo có slash ở giữa
+//   let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+  
+//   console.log('Final image URL:', finalUrl);
+//   return finalUrl;
+// };
 
   // Hàm hiển thị thumbnail
   const renderThumbnail = (mediaItem) => {
-    const imageUrl = getImageUrl(mediaItem.featuredImage);
-    console.log(imageUrl)
-    if (imageUrl) {
+    // const imageUrl = getImageUrl(mediaItem.featuredImage);
+
+    if (mediaItem.featuredImage.url) {
       return (
         <img 
-          src={imageUrl} 
+          src={mediaItem.featuredImage.url} 
           alt={mediaItem.title}
           className="w-full h-full object-cover"
           onError={(e) => {
-            console.error('Image failed to load:', imageUrl);
             e.target.src = 'https://via.placeholder.com/40x40?text=Error';
           }}
           loading="lazy"

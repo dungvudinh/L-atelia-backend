@@ -67,29 +67,34 @@ const MediaEditor = () => {
     }));
   };
 
-  const handleImageUpload = async (file) => {
-    setImageUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('featuredImage', file);
+  // MediaEditor.jsx - handleImageUpload
+const handleImageUpload = async (file) => {
+  setImageUploading(true);
+  try {
+    const formData = new FormData();
+    formData.append('featuredImage', file);
 
-      const response = await mediaService.uploadFeaturedImage(formData);
-      // Lưu đường dẫn vào formData
-      setFormData(prev => ({
-        ...prev,
-        featuredImage: {
-          url: response.data.url, 
-          key: response.data.key
-        }
-      }));
-      
-    } catch (error) {
-      console.error('Error uploading featured image:', error);
-      alert('Không thể tải ảnh lên');
-    } finally {
-      setImageUploading(false);
-    }
-  };
+    const response = await mediaService.uploadFeaturedImage(formData);
+    
+    // ✅ Lưu đầy đủ thông tin từ response
+    setFormData(prev => ({
+      ...prev,
+      featuredImage: {
+        url: response.data.url, 
+        key: response.data.key,
+        filename: response.data.filename,  // Thêm filename
+        size: response.data.size,          // Thêm size
+        uploaded_at: response.data.uploaded_at
+      }
+    }));
+    
+  } catch (error) {
+    console.error('Error uploading featured image:', error);
+    alert('Không thể tải ảnh lên');
+  } finally {
+    setImageUploading(false);
+  }
+};
   const handleDeleteFeaturedImage = async () => {
     if (!formData.featuredImage) return;
     try {
@@ -114,31 +119,49 @@ const MediaEditor = () => {
       alert('Không thể xóa ảnh');
     }
   };
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // MediaEditor.jsx - handleSubmit
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      
-      const submitData = {
-        ...formData,
-        tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+  try {
+    const submitData = {
+      title: formData.title,
+      content: formData.content,
+      excerpt: formData.excerpt,
+      category: formData.category,
+      status: formData.status,
+      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    };
+
+    // ✅ Chỉ gửi featuredImage nếu có và đầy đủ thông tin
+    if (formData.featuredImage && formData.featuredImage.url) {
+      submitData.featuredImage = {
+        url: formData.featuredImage.url,
+        key: formData.featuredImage.key,
+        filename: formData.featuredImage.filename || `image-${Date.now()}`,
+        size: formData.featuredImage.size || 0,
+        uploaded_at: formData.featuredImage.uploaded_at || new Date()
       };
-
-      if (isEditing) {
-        await mediaService.updateMedia(mediaId, submitData);
-      } else {
-        await mediaService.createMedia(submitData);
-      }
-
-      navigate('/media');
-    } catch (error) {
-      console.error('Error saving media:', error);
-      alert('Không thể lưu media');
-    } finally {
-      setLoading(false);
     }
-  };
+
+    console.log('📤 Submitting data:', submitData);
+
+    if (isEditing) {
+      await mediaService.updateMedia(mediaId, submitData);
+    } else {
+      await mediaService.createMedia(submitData);
+    }
+
+    navigate('/media');
+  } catch (error) {
+    console.error('❌ Error saving media:', error);
+    console.error('Error response:', error.response?.data);
+    alert('Không thể lưu media: ' + (error.response?.data?.message || error.message));
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <>
