@@ -184,8 +184,8 @@ const handleSubmit = async (e) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3 space-y-6">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
                   Tiêu đề *
@@ -277,7 +277,7 @@ const handleSubmit = async (e) => {
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="lg-col-span-1 space-y-6">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Xuất bản</h3>
                 
@@ -577,6 +577,7 @@ const MediaManager = ({ onClose, editorRef }) => {
   };
 
   const handleDeleteImage = async (imageId, event) => {
+    console.log('Deleting image with ID:', imageId);
     event?.stopPropagation();
     if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
       return;
