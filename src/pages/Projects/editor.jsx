@@ -1040,7 +1040,7 @@ const findDeletedImages = (originalArray, currentArray) => {
                         value={highlight.title}
                         onChange={(e) => updatePropertyHighlight(highlight.id, 'title', e.target.value)}
                         placeholder="Ví dụ: EXPANSIVE OUTDOORS"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-lg font-bold uppercase"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-lg font-bold"
                       />
                     </div>
                     <button
@@ -1140,7 +1140,7 @@ const findDeletedImages = (originalArray, currentArray) => {
                           type="text"
                           value={section.title || ''}
                           onChange={(e) => updateSpecialSection(section._id, 'title', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg font-bold uppercase"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg font-bold"
                           placeholder="Ví dụ: SPECTACULAR ARCHITECTURE"
                         />
                       </div>
