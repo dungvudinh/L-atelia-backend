@@ -6,7 +6,15 @@ export const mediaService = {
     try {
       console.log('📋 Fetching media with params:', params);
       
-      const response = await axiosClient.get('/v1/media', { params });
+      const response = await axiosClient.get('/v1/media', { 
+        params: {
+          page: params.page || 1,
+          limit: params.limit || 10,
+          status: params.status,
+          category: params.category,
+          search: params.search
+        }
+      });
       console.log('✅ Media fetched successfully');
       
       return response.data;
