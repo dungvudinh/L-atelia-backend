@@ -24,6 +24,11 @@ const MediaEditor = () => {
   const [loading, setLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [showMediaManager, setShowMediaManager] = useState(false);
+  const [pendingImageDeletion, setPendingImageDeletion] = useState(false);
+  const [originalFeaturedImage, setOriginalFeaturedImage] = useState(null);
+  const [pendingImageUpload, setPendingImageUpload] = useState(null);
+  const [localImageUrl, setLocalImageUrl] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (isEditing) {
@@ -35,15 +40,28 @@ const MediaEditor = () => {
     try {
       setLoading(true);
       const response = await mediaService.getMediaById(mediaId);
+      const featuredImage = response.data.featuredImage || '';
+      
       setFormData({
         title: response.data.title,
         content: response.data.content,
         excerpt: response.data.excerpt || '',
         category: response.data.category,
         status: response.data.status,
-        featuredImage: response.data.featuredImage || '',
+        featuredImage: featuredImage,
         tags: response.data.tags ? response.data.tags.join(', ') : ''
       });
+      
+      if (featuredImage) {
+        setOriginalFeaturedImage(featuredImage);
+      } else {
+        setOriginalFeaturedImage(null);
+      }
+      
+      setPendingImageDeletion(false);
+      setPendingImageUpload(null);
+      setLocalImageUrl(null);
+      setErrorMessage('');
     } catch (error) {
       console.error('Error loading media:', error);
       alert('Không thể tải media');
@@ -67,101 +85,292 @@ const MediaEditor = () => {
     }));
   };
 
-  // MediaEditor.jsx - handleImageUpload
-const handleImageUpload = async (file) => {
-  setImageUploading(true);
-  try {
-    const formData = new FormData();
-    formData.append('featuredImage', file);
-
-    const response = await mediaService.uploadFeaturedImage(formData);
+  // Xử lý upload ảnh - chỉ tạo URL local, không gọi API
+  const handleImageUpload = (file) => {
+    if (!file) return;
     
-    // ✅ Lưu đầy đủ thông tin từ response
+    setImageUploading(true);
+    
+    // Tạo URL local để hiển thị preview
+    const localUrl = URL.createObjectURL(file);
+    setLocalImageUrl(localUrl);
+    
+    // Lưu file để upload sau
+    setPendingImageUpload(file);
+    
+    // Cập nhật form data với thông tin tạm thời
     setFormData(prev => ({
       ...prev,
       featuredImage: {
-        url: response.data.url, 
-        key: response.data.key,
-        filename: response.data.filename,  // Thêm filename
-        size: response.data.size,          // Thêm size
-        uploaded_at: response.data.uploaded_at
+        url: localUrl,
+        filename: file.name,
+        size: file.size,
+        uploaded_at: new Date(),
+        isLocal: true // Đánh dấu là ảnh local chưa upload
       }
     }));
     
-  } catch (error) {
-    console.error('Error uploading featured image:', error);
-    alert('Không thể tải ảnh lên');
-  } finally {
+    // Clear error message khi có ảnh mới
+    setErrorMessage('');
+    
     setImageUploading(false);
-  }
-};
-  const handleDeleteFeaturedImage = async () => {
+  };
+
+  // Xóa ảnh - chỉ xóa ở UI
+  const handleDeleteFeaturedImage = () => {
     if (!formData.featuredImage) return;
-    try {
-      // Lấy filename từ đường dẫn
-      console.log(formData)
-      // const imageInfo = {
-      //   imageUrl: formData.featuredImage,  // URL đầy đủ (cho Cloudinary)
-      //   // filename: formData.featuredImage.split('/').pop() // Tên file (cho local)
-      // };
-      
-      // Gọi API xóa file
-      await mediaService.deleteFeaturedImage(formData.featuredImage.key);
-      
-      // Xóa khỏi form data
-      setFormData(prev => ({
-        ...prev,
-        featuredImage: ''
-      }));
-      
-    } catch (error) {
-      console.error('Error deleting featured image:', error);
-      alert('Không thể xóa ảnh');
+    
+    // Nếu có URL local, giải phóng bộ nhớ
+    if (localImageUrl) {
+      URL.revokeObjectURL(localImageUrl);
+      setLocalImageUrl(null);
+    }
+    
+    // Nếu có ảnh gốc, đánh dấu để xóa khi submit
+    if (originalFeaturedImage) {
+      setPendingImageDeletion(true);
+    }
+    
+    // Reset pending upload nếu có
+    if (pendingImageUpload) {
+      setPendingImageUpload(null);
+    }
+    
+    // Xóa khỏi UI
+    setFormData(prev => ({
+      ...prev,
+      featuredImage: ''
+    }));
+    
+    // Set error message vì không còn ảnh
+    if (!isEditing) {
+      setErrorMessage('Vui lòng thêm ảnh đại diện trước khi xuất bản');
     }
   };
-  // MediaEditor.jsx - handleSubmit
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
 
-  try {
-    const submitData = {
-      title: formData.title,
-      content: formData.content,
-      excerpt: formData.excerpt,
-      category: formData.category,
-      status: formData.status,
-      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
-    };
+  // Khôi phục ảnh đã xóa
+  const handleRestoreFeaturedImage = () => {
+    if (originalFeaturedImage) {
+      setFormData(prev => ({
+        ...prev,
+        featuredImage: originalFeaturedImage
+      }));
+      setPendingImageDeletion(false);
+      setErrorMessage('');
+    }
+  };
 
-    // ✅ Chỉ gửi featuredImage nếu có và đầy đủ thông tin
-    if (formData.featuredImage && formData.featuredImage.url) {
-      submitData.featuredImage = {
-        url: formData.featuredImage.url,
-        key: formData.featuredImage.key,
-        filename: formData.featuredImage.filename || `image-${Date.now()}`,
-        size: formData.featuredImage.size || 0,
-        uploaded_at: formData.featuredImage.uploaded_at || new Date()
+  // Kiểm tra xem có ảnh đại diện không
+  const hasFeaturedImage = () => {
+    // Có ảnh mới chưa upload
+    if (pendingImageUpload) return true;
+    
+    // Có ảnh trong form data (có thể là ảnh cũ hoặc ảnh mới đã được xử lý)
+    if (formData.featuredImage) {
+      // Nếu là object có isLocal = false hoặc không có isLocal (ảnh từ server)
+      if (typeof formData.featuredImage === 'object') {
+        return !formData.featuredImage.isLocal;
+      }
+      // Nếu là string (URL ảnh)
+      return true;
+    }
+    
+    // Có ảnh cũ và không có đánh dấu xóa
+    if (originalFeaturedImage && !pendingImageDeletion) return true;
+    
+    return false;
+  };
+
+  // Validate trước khi submit
+  const validateBeforeSubmit = () => {
+    // Kiểm tra trường bắt buộc
+    if (!formData.title.trim()) {
+      setErrorMessage('Vui lòng nhập tiêu đề');
+      return false;
+    }
+    
+    if (!formData.content.trim()) {
+      setErrorMessage('Vui lòng nhập nội dung');
+      return false;
+    }
+    
+    // Kiểm tra ảnh đại diện
+    if (!hasFeaturedImage()) {
+      setErrorMessage('Vui lòng thêm ảnh đại diện trước khi ' + (isEditing ? 'cập nhật' : 'xuất bản'));
+      return false;
+    }
+    
+    setErrorMessage('');
+    return true;
+  };
+
+  // Xử lý khi submit form
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validate trước khi submit
+    if (!validateBeforeSubmit()) {
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const submitData = {
+        title: formData.title,
+        content: formData.content,
+        excerpt: formData.excerpt,
+        category: formData.category,
+        status: formData.status,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      };
+
+      // 1. Xử lý upload ảnh mới nếu có
+      if (pendingImageUpload) {
+        try {
+          const uploadFormData = new FormData();
+          uploadFormData.append('featuredImage', pendingImageUpload);
+          
+          const uploadResponse = await mediaService.uploadFeaturedImage(uploadFormData);
+          
+          submitData.featuredImage = {
+            url: uploadResponse.data.url,
+            key: uploadResponse.data.key,
+            filename: uploadResponse.data.filename,
+            size: uploadResponse.data.size,
+            uploaded_at: uploadResponse.data.uploaded_at
+          };
+          
+          console.log('✅ Đã upload ảnh mới lên B2');
+          
+          // 2. Xóa ảnh cũ nếu có và đã upload ảnh mới
+          if (originalFeaturedImage && originalFeaturedImage.key) {
+            try {
+              await mediaService.deleteFeaturedImage(originalFeaturedImage.key);
+              console.log('✅ Đã xóa ảnh cũ từ B2');
+            } catch (deleteError) {
+              console.warn('⚠️ Không thể xóa ảnh cũ từ B2:', deleteError.message);
+              // Vẫn tiếp tục vì đã có ảnh mới
+            }
+          }
+          
+        } catch (uploadError) {
+          console.error('❌ Lỗi upload ảnh:', uploadError);
+          alert('Không thể upload ảnh lên server');
+          setLoading(false);
+          return;
+        }
+      }
+      // 3. Xử lý xóa ảnh nếu không có ảnh mới nhưng có đánh dấu xóa
+      else if (pendingImageDeletion && originalFeaturedImage) {
+        // Đánh dấu là xóa ảnh (gửi chuỗi rỗng)
+        submitData.featuredImage = '';
+        
+        try {
+          await mediaService.deleteFeaturedImage(originalFeaturedImage.key);
+          console.log('✅ Đã xóa ảnh từ B2');
+        } catch (deleteError) {
+          console.warn('⚠️ Không thể xóa ảnh từ B2:', deleteError.message);
+          // Vẫn tiếp tục cập nhật bài viết
+        }
+      }
+      // 4. Giữ nguyên ảnh cũ nếu không có thay đổi
+      else if (originalFeaturedImage && !pendingImageDeletion && !pendingImageUpload) {
+        submitData.featuredImage = originalFeaturedImage;
+      }
+      // 5. Trường hợp tạo mới có ảnh mới (đã được xử lý ở trên)
+      // 6. Không có ảnh nào (không xảy ra vì đã validate)
+      else {
+        // Nếu là tạo mới và không có pendingImageUpload, có thể có ảnh từ formData
+        if (formData.featuredImage && typeof formData.featuredImage === 'object' && !formData.featuredImage.isLocal) {
+          submitData.featuredImage = formData.featuredImage;
+        } else {
+          submitData.featuredImage = '';
+        }
+      }
+
+      console.log('📤 Submitting data:', submitData);
+
+      // Gọi API lưu media
+      if (isEditing) {
+        await mediaService.updateMedia(mediaId, submitData);
+      } else {
+        await mediaService.createMedia(submitData);
+      }
+
+      // Giải phóng URL local nếu có
+      if (localImageUrl) {
+        URL.revokeObjectURL(localImageUrl);
+      }
+
+      // Reset các state
+      setPendingImageDeletion(false);
+      setPendingImageUpload(null);
+      setLocalImageUrl(null);
+      setErrorMessage('');
+      
+      navigate('/media');
+    } catch (error) {
+      console.error('❌ Error saving media:', error);
+      console.error('Error response:', error.response?.data);
+      alert('Không thể lưu media: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hủy bỏ thay đổi
+  const handleCancel = () => {
+    // Giải phóng URL local nếu có
+    if (localImageUrl) {
+      URL.revokeObjectURL(localImageUrl);
+    }
+    
+    // Reset các state
+    setPendingImageDeletion(false);
+    setPendingImageUpload(null);
+    setLocalImageUrl(null);
+    setErrorMessage('');
+    
+    navigate('/media');
+  };
+
+  // Lấy URL ảnh để hiển thị
+  const getImageUrl = (imageData) => {
+    if (!imageData) return null;
+    
+    // Nếu là string (URL từ server)
+    if (typeof imageData === 'string') {
+      return imageData;
+    }
+    
+    // Nếu là object có thuộc tính url
+    if (typeof imageData === 'object' && imageData.url) {
+      return imageData.url;
+    }
+    
+    return null;
+  };
+
+  // Lấy thông tin ảnh để hiển thị
+  const getImageInfo = () => {
+    if (!formData.featuredImage) return null;
+    
+    if (typeof formData.featuredImage === 'object') {
+      return {
+        url: getImageUrl(formData.featuredImage),
+        filename: formData.featuredImage.filename || 'Ảnh tải lên',
+        isLocal: formData.featuredImage.isLocal || false
       };
     }
+    
+    return {
+      url: getImageUrl(formData.featuredImage),
+      filename: 'Ảnh đại diện'
+    };
+  };
 
-    console.log('📤 Submitting data:', submitData);
-
-    if (isEditing) {
-      await mediaService.updateMedia(mediaId, submitData);
-    } else {
-      await mediaService.createMedia(submitData);
-    }
-
-    navigate('/media');
-  } catch (error) {
-    console.error('❌ Error saving media:', error);
-    console.error('Error response:', error.response?.data);
-    alert('Không thể lưu media: ' + (error.response?.data?.message || error.message));
-  } finally {
-    setLoading(false);
-  }
-};
+  const imageInfo = getImageInfo();
 
   return (
     <>
@@ -182,6 +391,18 @@ const handleSubmit = async (e) => {
             ← Quay lại danh sách
           </Link>
         </div>
+
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-red-700 font-medium">{errorMessage}</p>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -207,48 +428,47 @@ const handleSubmit = async (e) => {
                   Nội dung *
                 </label>
                 <Editor
-  apiKey="e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez"
-  onInit={(evt, editor) => editorRef.current = editor}
-  value={formData.content}
-  onEditorChange={handleEditorChange}
-  init={{
-    height: 500,
-    menubar: 'file edit view insert format tools table',
-    plugins: [
-      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-      'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
-    ],
-    font_family_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Nunito Sans=nunito sans;Cormorant Infant=cormorant infant,sans-serif',
-    toolbar: 'undo redo | blocks fontfamily | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image media | code', // Added backcolor if desired
-    content_style: `
-      @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
-      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300..700;1,300..700&display=swap');
-      body { font-family: Nunito Sans, sans-serif; }
-    `,
-    color_map: [
-      '#F3EEE7', 'BG Primary',    // --color-bg-primary
-      '#404040', 'TXT Primary',    // --color-txt-primary
-      '#2F5855', 'TXT Secondary',  // --color-txt-secondary
-      '#434343', 'TXT Gray',       // --color-txt-gray
-      '#344D3B', 'BG Secondary',   // --color-bg-secondary
-      '#D9D9D9', 'Dot',            // --color-dot
-      // Add more defaults if needed, e.g.:
-      '#000000', 'Black',
-      '#FFFFFF', 'White',
-      '#FF0000', 'Red'
-    ],
-    color_cols: 3,  // Optional: Number of columns in the color grid (default is 10)
-    color_default_foreground: '#404040',  // Optional: Default text color (your --color-txt-primary)
-    color_default_background: '#F3EEE7',  // Optional: Default background color (your --color-bg-primary)
-    file_picker_types: 'image media',
-    file_picker_callback: (callback, value, meta) => {
-      if (meta.filetype === 'image') {
-        setShowMediaManager(true);
-      }
-    }
-  }}
-/>
+                  apiKey="e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez"
+                  onInit={(evt, editor) => editorRef.current = editor}
+                  value={formData.content}
+                  onEditorChange={handleEditorChange}
+                  init={{
+                    height: 500,
+                    menubar: 'file edit view insert format tools table',
+                    plugins: [
+                      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                      'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
+                    ],
+                    font_family_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Nunito Sans=nunito sans;Cormorant Infant=cormorant infant,sans-serif',
+                    toolbar: 'undo redo | blocks fontfamily | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image media | code',
+                    content_style: `
+                      @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+                      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300..700;1,300..700&display=swap');
+                      body { font-family: Nunito Sans, sans-serif; }
+                    `,
+                    color_map: [
+                      '#F3EEE7', 'BG Primary',
+                      '#404040', 'TXT Primary',
+                      '#2F5855', 'TXT Secondary',
+                      '#434343', 'TXT Gray',
+                      '#344D3B', 'BG Secondary',
+                      '#D9D9D9', 'Dot',
+                      '#000000', 'Black',
+                      '#FFFFFF', 'White',
+                      '#FF0000', 'Red'
+                    ],
+                    color_cols: 3,
+                    color_default_foreground: '#404040',
+                    color_default_background: '#F3EEE7',
+                    file_picker_types: 'image media',
+                    file_picker_callback: (callback, value, meta) => {
+                      if (meta.filetype === 'image') {
+                        setShowMediaManager(true);
+                      }
+                    }
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => setShowMediaManager(true)}
@@ -277,7 +497,7 @@ const handleSubmit = async (e) => {
               </div>
             </div>
 
-            <div className="lg-col-span-1 space-y-6">
+            <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Xuất bản</h3>
                 
@@ -325,7 +545,7 @@ const handleSubmit = async (e) => {
                     {isEditing && (
                       <button
                         type="button"
-                        onClick={() => navigate('/media')}
+                        onClick={handleCancel}
                         className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                       >
                         Hủy
@@ -336,26 +556,62 @@ const handleSubmit = async (e) => {
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Ảnh đại diện</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Ảnh đại diện *</h3>
                 
-                {formData.featuredImage ? (
+                {imageInfo ? (
                   <div className="space-y-3">
-                    <img 
-                      src={getImageUrl(formData.featuredImage.url)} 
-                      alt="Featured" 
-                      className="w-full h-48 object-cover rounded-lg"
+                    <div className="relative">
+                      <img 
+                        src={imageInfo.url} 
+                        alt="Featured" 
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                      {imageInfo.isLocal && (
+                        <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
+                          Chưa upload
+                        </div>
+                      )}
+                      {pendingImageDeletion && !imageInfo.isLocal && (
+                        <div className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                          Sẽ xóa
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleDeleteFeaturedImage}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        Xóa ảnh
+                      </button>
                       
-                    />
-                    <button
-                      type="button"
-                      onClick={handleDeleteFeaturedImage}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      Xóa ảnh
-                    </button>
+                      {pendingImageDeletion && !imageInfo.isLocal && (
+                        <div className="text-xs text-red-600 font-medium bg-red-50 p-2 rounded text-center">
+                          Ảnh sẽ bị xóa khi bạn nhấn "{isEditing ? 'Cập nhật' : 'Xuất bản'}"
+                        </div>
+                      )}
+                      
+                      {imageInfo.isLocal && (
+                        <div className="text-xs text-yellow-600 font-medium bg-yellow-50 p-2 rounded text-center">
+                          Ảnh sẽ được upload khi bạn nhấn "{isEditing ? 'Cập nhật' : 'Xuất bản'}"
+                        </div>
+                      )}
+                    </div>
+                    
+                    {pendingImageDeletion && originalFeaturedImage && !imageInfo.isLocal && (
+                      <button
+                        type="button"
+                        onClick={handleRestoreFeaturedImage}
+                        className="w-full text-sm text-blue-600 hover:text-blue-800 font-medium px-4 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                      >
+                        Khôi phục ảnh
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className={`border-2 border-dashed ${errorMessage && !hasFeaturedImage() ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-lg p-6 text-center`}>
                     <input
                       type="file"
                       id="featuredImage"
@@ -363,17 +619,25 @@ const handleSubmit = async (e) => {
                       onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) handleImageUpload(file);
+                        e.target.value = ''; // Reset input
                       }}
                       className="hidden"
                     />
                     <label htmlFor="featuredImage" className="cursor-pointer">
-                      <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-12 h-12 ${errorMessage && !hasFeaturedImage() ? 'text-red-400' : 'text-gray-400'} mx-auto mb-3`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {imageUploading ? 'Đang tải lên...' : 'Nhấp để tải ảnh lên'}
+                      <p className={`text-sm ${errorMessage && !hasFeaturedImage() ? 'text-red-600' : 'text-gray-600'} mb-2`}>
+                        {imageUploading ? 'Đang xử lý...' : 'Nhấp để tải ảnh lên'}
                       </p>
-                      <span className="text-xs text-gray-500">PNG, JPG, GIF tối đa 10MB</span>
+                      <span className={`text-xs ${errorMessage && !hasFeaturedImage() ? 'text-red-500' : 'text-gray-500'}`}>
+                        PNG, JPG, GIF tối đa 10MB
+                      </span>
+                      {errorMessage && !hasFeaturedImage() && (
+                        <p className="text-xs text-red-600 mt-2 font-medium">
+                          Ảnh đại diện là bắt buộc
+                        </p>
+                      )}
                     </label>
                   </div>
                 )}
@@ -408,28 +672,7 @@ const handleSubmit = async (e) => {
     </>
   );
 };
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  
-  console.log('Original image path:', imagePath);
-  
-  // Nếu là URL đầy đủ (http/https) hoặc data URL
-  if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-    return imagePath;
-  }
-  
-  // Nếu là đường dẫn tương đối
-  const baseUrl = 'http://localhost:3000';
-  
-  // Xử lý đường dẫn Windows (có backslash)
-  const normalizedPath = imagePath.replace(/\\/g, '/');
-  
-  // Đảm bảo có slash ở giữa
-  let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
-  
-  console.log('Final image URL:', finalUrl);
-  return finalUrl;
-};
+
 const MediaManager = ({ onClose, editorRef }) => {
   const [folders, setFolders] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
@@ -440,7 +683,20 @@ const MediaManager = ({ onClose, editorRef }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load folders với useCallback để tránh re-render không cần thiết
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    
+    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+      return imagePath;
+    }
+    
+    const baseUrl = 'http://localhost:3000';
+    const normalizedPath = imagePath.replace(/\\/g, '/');
+    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    
+    return finalUrl;
+  };
+
   const loadFolders = useCallback(async () => {
     try {
       setLoading(true);
@@ -449,7 +705,6 @@ const MediaManager = ({ onClose, editorRef }) => {
       
       setFolders(foldersData);
       
-      // Set folder đầu tiên làm current folder
       if (foldersData.length > 0) {
         const firstFolder = foldersData[0];
         setCurrentFolder(firstFolder);
@@ -494,7 +749,6 @@ const MediaManager = ({ onClose, editorRef }) => {
       setNewFolderName('');
       setShowCreateFolder(false);
       
-      // Load lại folder mới tạo
       await loadFolderImages(response.data._id);
     } catch (error) {
       console.error('Error creating folder:', error);
@@ -512,19 +766,15 @@ const MediaManager = ({ onClose, editorRef }) => {
     try {
       await folderService.deleteFolder(folderId);
       
-      // CẬP NHẬT QUAN TRỌNG: Xử lý state update đúng cách
       const updatedFolders = folders.filter(folder => folder._id !== folderId);
       setFolders(updatedFolders);
       
-      // Nếu đang xem folder bị xóa
       if (currentFolder && currentFolder._id === folderId) {
         if (updatedFolders.length > 0) {
-          // Chuyển đến folder đầu tiên trong danh sách còn lại
           const newCurrentFolder = updatedFolders[0];
           setCurrentFolder(newCurrentFolder);
           await loadFolderImages(newCurrentFolder._id);
         } else {
-          // Không còn folder nào
           setCurrentFolder(null);
           setImages([]);
         }
@@ -538,7 +788,7 @@ const MediaManager = ({ onClose, editorRef }) => {
       }
     }
   };
-  console.log(images)
+
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0 || !currentFolder) return;
@@ -549,12 +799,10 @@ const MediaManager = ({ onClose, editorRef }) => {
     try {
       const formData = new FormData();
       files.forEach(file => {
-        formData.append('images', file); // Sửa thành 'images' thay vì 'mediaFiles'
+        formData.append('images', file);
       });
 
       const response = await folderService.uploadImages(currentFolder._id, formData);
-      console.log('RESPONSE', response)
-      // Cập nhật state một lần duy nhất
       const newImages = response.data.uploadedImages;
       setImages(prev => [...prev, ...newImages]);
       
@@ -577,7 +825,6 @@ const MediaManager = ({ onClose, editorRef }) => {
   };
 
   const handleDeleteImage = async (imageId, event) => {
-    console.log('Deleting image with ID:', imageId);
     event?.stopPropagation();
     if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
       return;
@@ -586,7 +833,6 @@ const MediaManager = ({ onClose, editorRef }) => {
     try {
       await folderService.deleteImage(currentFolder._id, imageId);
       
-      // Cập nhật state một lần duy nhất
       setImages(prev => prev.filter(img => img._id !== imageId));
       
       setFolders(prev => prev.map(folder => 
@@ -609,18 +855,14 @@ const MediaManager = ({ onClose, editorRef }) => {
       const editor = editorRef.current;
       const imageUrl = getImageUrl(image.url);
       
-      // Chèn ảnh vào editor
       editor.execCommand('mceInsertContent', false, `
         <img 
           src="${imageUrl}" 
-          
           alt="${image.originalName}" 
           style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;"
           data-image-id="${image._id}"
         />
       `);
-      
-      console.log('✅ Đã chèn ảnh vào editor:', image.originalName);
     }
     
     onClose();
@@ -631,7 +873,6 @@ const MediaManager = ({ onClose, editorRef }) => {
     await loadFolderImages(folder._id);
   };
 
-  // Component Image với xử lý lỗi tốt hơn
   const ImageItem = ({ image }) => {
     const [imgError, setImgError] = useState(false);
     const [imgLoading, setImgLoading] = useState(true);
@@ -709,7 +950,6 @@ const MediaManager = ({ onClose, editorRef }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg w-full max-w-6xl h-[80vh] flex flex-col">
-        {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Thư viện Media</h2>
@@ -727,7 +967,6 @@ const MediaManager = ({ onClose, editorRef }) => {
           </button>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm">{error}</p>
@@ -741,7 +980,6 @@ const MediaManager = ({ onClose, editorRef }) => {
         )}
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar - Folders */}
           <div className="w-64 border-r border-gray-200 bg-gray-50 p-4 overflow-y-auto">
             <div className="space-y-2">
               <button
@@ -831,11 +1069,9 @@ const MediaManager = ({ onClose, editorRef }) => {
             </div>
           </div>
 
-          {/* Main Content - Images */}
           <div className="flex-1 p-6 overflow-y-auto">
             {currentFolder ? (
               <>
-                {/* Upload Area */}
                 <div className="mb-6">
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -865,7 +1101,6 @@ const MediaManager = ({ onClose, editorRef }) => {
                   </div>
                 )}
 
-                {/* Images Grid - Sử dụng ImageItem component mới */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {images.map(image => (
                     <ImageItem key={image._id} image={image} />
@@ -894,7 +1129,6 @@ const MediaManager = ({ onClose, editorRef }) => {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="border-t border-gray-200 p-4 bg-gray-50">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-600">
