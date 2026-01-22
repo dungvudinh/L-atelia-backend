@@ -1,7 +1,7 @@
 // File: src/utils/axiosClient.js (ADMIN CLIENT)
 import axios from 'axios';
 
-const API_BASE_URL = 'http://l-atelia-api-yct5.onrender.com';
+const API_BASE_URL = 'https://l-atelia-api-yct5.onrender.com';
 
 class AdminApiClient {
   constructor() {
