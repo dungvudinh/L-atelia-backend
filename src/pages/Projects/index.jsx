@@ -74,7 +74,7 @@ const Projects = () => {
       // Hàm hiển thị ảnh thumbnail - SỬA LẠI
       const renderThumbnail = (project) => {
         
-        const imageUrl = getImageUrl(project.heroImage.url);
+        const imageUrl = project.heroImage != null ? getImageUrl(project.heroImage.url) : null;
         
         if (imageUrl) {
           return (
