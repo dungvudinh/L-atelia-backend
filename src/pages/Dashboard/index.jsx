@@ -1,7 +1,9 @@
 // src/pages/admin/Dashboard.jsx
 import { BarChart3, Users, DollarSign, ShoppingCart } from 'lucide-react';
-
+import { useDispatch } from 'react-redux';
+import { setLoading } from '../../redux/features/loadingSlice';
 const Dashboard = () => {
+  const dispatch = useDispatch();
   const stats = [
     {
       title: 'Total Revenue',
