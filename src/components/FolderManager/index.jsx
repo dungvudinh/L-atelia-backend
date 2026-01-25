@@ -126,15 +126,18 @@ const FolderManager = ({
     }
   };
 
-  const handleFileUpload = async (event) => {
-    if (!allowUpload) return;
-    
-    const files = Array.from(event.target.files);
-    if (files.length === 0 || !currentFolder) return;
+  // components/FolderManager.jsx - CHỈ SỬA PHẦN UPLOAD
+const handleFileUpload = async (event) => {
+  if (!allowUpload) return;
+  
+  const files = Array.from(event.target.files);
+  if (files.length === 0 || !currentFolder) return;
 
-    setUploading(true);
-    setError(null);
+  setUploading(true);
+  setError(null);
 
+  try {
+    // TRY 1: Dùng method thông thường
     try {
       const formData = new FormData();
       files.forEach(file => {
@@ -143,8 +146,9 @@ const FolderManager = ({
 
       const response = await folderService.uploadImages(currentFolder._id, formData);
       const newImages = response.data.uploadedImages;
-      setImages(prev => [...prev, ...newImages]);
       
+      // Update state
+      setImages(prev => [...prev, ...newImages]);
       setFolders(prev => prev.map(folder => 
         folder._id === currentFolder._id 
           ? { 
@@ -153,15 +157,44 @@ const FolderManager = ({
             }
           : folder
       ));
-
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      setError('Không thể tải ảnh lên');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
+      
+    } catch (uploadError) {
+      console.log('Standard upload failed, trying form submission...', uploadError.message);
+      
+      // TRY 2: Dùng form submission fallback
+      const response = await folderService.uploadImagesViaForm(currentFolder._id, files);
+      const newImages = response.data.uploadedImages;
+      
+      // Update state
+      setImages(prev => [...prev, ...newImages]);
+      setFolders(prev => prev.map(folder => 
+        folder._id === currentFolder._id 
+          ? { 
+              ...folder, 
+              images: [...(folder.images || []), ...newImages]
+            }
+          : folder
+      ));
+      
+      // Hiển thị thông báo
+      alert('Đã sử dụng phương pháp upload thay thế để vượt qua extension blocking');
     }
-  };
+
+  } catch (error) {
+    console.error('Error uploading images:', error);
+    
+    // Phân tích lỗi
+    if (error.message.includes('timeout') || error.message.includes('blocked')) {
+      setError('Upload bị chặn bởi extension trình duyệt. Vui lòng tắt ad-blocker hoặc dùng chế độ ẩn danh.');
+    } else {
+      setError('Không thể tải ảnh lên: ' + error.message);
+    }
+    
+  } finally {
+    setUploading(false);
+    event.target.value = '';
+  }
+};
 
   const handleDeleteImage = async (imageId, event) => {
     event?.stopPropagation();

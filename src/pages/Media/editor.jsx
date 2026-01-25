@@ -803,7 +803,8 @@ const MediaManager = ({ onClose, editorRef }) => {
       });
 
       const response = await folderService.uploadImages(currentFolder._id, formData);
-      const newImages = response.data.uploadedImages;
+      console.log(response)
+      const newImages = response.data.data.uploadedImages;
       setImages(prev => [...prev, ...newImages]);
       
       setFolders(prev => prev.map(folder => 
