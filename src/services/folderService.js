@@ -78,7 +78,7 @@ export const folderService = {
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 phút
       
       try {
-        const response = await fetch(`http://localhost:3000/v1/folders/${folderId}/upload`, {
+        const response = await fetch(`https://l-atelia-api-yct5.onrender.com/v1/folders/${folderId}/upload`, {
           method: 'POST',
           body: formData,
           signal: controller.signal,
