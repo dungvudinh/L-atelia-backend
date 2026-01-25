@@ -8,7 +8,7 @@ const API_BASE_URL = 'https://l-atelia-api-yct5.onrender.com';
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
-  withCredentials: true, // QUAN TRỌNG: Đặt false cho cross-origin
+  withCredentials: false, // QUAN TRỌNG: Đặt false cho cross-origin
   headers: {
     'Content-Type': 'application/json',
     'X-Client': 'admin-web',
