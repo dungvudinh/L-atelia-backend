@@ -4,7 +4,6 @@ export const mediaService = {
   // Get all media
   getMedia: async (params = {}) => {
     try {
-      console.log('📋 Fetching media with params:', params);
       
       const response = await axiosClient.get('/v1/media', { 
         params: {
@@ -15,7 +14,6 @@ export const mediaService = {
           search: params.search
         }
       });
-      console.log('✅ Media fetched successfully');
       
       return response.data;
     } catch (error) {
@@ -27,10 +25,8 @@ export const mediaService = {
   // Get media by ID
   getMediaById: async (id) => {
     try {
-      console.log(`📋 Fetching media with ID: ${id}`);
       
       const response = await axiosClient.get(`/v1/media/${id}`);
-      console.log('✅ Media fetched successfully');
       
       return response.data;
     } catch (error) {
@@ -42,10 +38,8 @@ export const mediaService = {
   // Create media
   createMedia: async (mediaData) => {
     try {
-      console.log('🔄 Creating media:', mediaData);
       
       const response = await axiosClient.post('/v1/media', mediaData);
-      console.log('✅ Media created successfully');
       
       return response.data;
     } catch (error) {
@@ -57,10 +51,8 @@ export const mediaService = {
   // Update media
   updateMedia: async (id, mediaData) => {
     try {
-      console.log(`🔄 Updating media with ID: ${id}`);
       
       const response = await axiosClient.put(`/v1/media/${id}`, mediaData);
-      console.log('✅ Media updated successfully');
       
       return response.data;
     } catch (error) {
@@ -72,10 +64,8 @@ export const mediaService = {
   // Delete media
   deleteMedia: async (id) => {
     try {
-      console.log(`🗑️ Deleting media with ID: ${id}`);
       
       const response = await axiosClient.delete(`/v1/media/${id}`);
-      console.log('✅ Media deleted successfully');
       
       return response.data;
     } catch (error) {

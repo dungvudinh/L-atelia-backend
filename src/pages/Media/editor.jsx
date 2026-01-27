@@ -4,6 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Editor } from '@tinymce/tinymce-react';
 import { folderService } from '../../services/folderService';
 import { mediaService } from '../../services/mediaService';
+import { b2Service } from '../../services/b2Service'; // New service for B2 pre-signed URLs
 
 const MediaEditor = () => {
   const { mediaId } = useParams();
@@ -85,35 +86,108 @@ const MediaEditor = () => {
     }));
   };
 
-  // Xử lý upload ảnh - chỉ tạo URL local, không gọi API
-  const handleImageUpload = (file) => {
+  // Xử lý upload ảnh với pre-signed URL
+  const handleImageUpload = async (file) => {
     if (!file) return;
     
-    setImageUploading(true);
-    
-    // Tạo URL local để hiển thị preview
-    const localUrl = URL.createObjectURL(file);
-    setLocalImageUrl(localUrl);
-    
-    // Lưu file để upload sau
-    setPendingImageUpload(file);
-    
-    // Cập nhật form data với thông tin tạm thời
-    setFormData(prev => ({
-      ...prev,
-      featuredImage: {
-        url: localUrl,
-        filename: file.name,
+    try {
+      setImageUploading(true);
+      
+      // 1. Tạo URL local để hiển thị preview
+      const localUrl = URL.createObjectURL(file);
+      setLocalImageUrl(localUrl);
+      
+      // 2. Lưu file để upload sau
+      setPendingImageUpload(file);
+      
+      // 3. Tạo tên file unique
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-').toLowerCase();
+      const uniqueFilename = `${timestamp}-${safeName}`;
+      
+      // 4. Cập nhật form data với thông tin tạm thời
+      setFormData(prev => ({
+        ...prev,
+        featuredImage: {
+          url: localUrl,
+          filename: uniqueFilename,
+          originalName: file.name,
+          size: file.size,
+          type: file.type,
+          isLocal: true,
+          uploadPending: true
+        }
+      }));
+      
+      // 5. Clear error message khi có ảnh mới
+      setErrorMessage('');
+      
+      console.log('📝 Prepared image for upload:', {
+        filename: uniqueFilename,
         size: file.size,
-        uploaded_at: new Date(),
-        isLocal: true // Đánh dấu là ảnh local chưa upload
+        type: file.type
+      });
+      
+    } catch (error) {
+      console.error('❌ Error preparing image:', error);
+      alert('Không thể xử lý ảnh');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  // Upload ảnh lên B2 sử dụng pre-signed URL
+  const uploadImageToB2 = async (file) => {
+  try {
+    console.log('🚀 Uploading featured image via proxy...');
+    
+    // Show upload progress
+    const uploadResult = await b2Service.uploadFile(
+      file, 
+      'featured-images',
+      (percent) => {
+        console.log(`📊 Upload progress: ${percent}%`);
+        // You can update UI with progress here
       }
-    }));
+    );
     
-    // Clear error message khi có ảnh mới
-    setErrorMessage('');
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.message);
+    }
     
-    setImageUploading(false);
+    console.log('✅ Featured image uploaded:', uploadResult.data);
+    
+    return {
+      url: uploadResult.data.url,
+      key: uploadResult.data.key,
+      filename: uploadResult.data.filename,
+      originalName: uploadResult.data.originalName,
+      size: uploadResult.data.size,
+      type: uploadResult.data.type,
+      uploadedAt: uploadResult.data.uploadedAt,
+      optimized: uploadResult.data.optimized || false
+    };
+    
+  } catch (error) {
+    console.error('❌ Featured image upload failed:', error);
+    throw new Error(`Không thể upload ảnh đại diện: ${error.message}`);
+  }
+};
+
+  // Xóa ảnh từ B2
+  const deleteImageFromB2 = async (imageKey) => {
+    try {
+      if (!imageKey) return;
+      
+      console.log('🗑️ Deleting image from B2:', imageKey);
+      await b2Service.deleteFile(imageKey);
+      console.log('✅ Image deleted from B2');
+      
+    } catch (error) {
+      console.error('❌ Failed to delete image from B2:', error);
+      // Không throw error để không ảnh hưởng đến flow chính
+      // Ảnh sẽ bị xóa sau hoặc qua cleanup job
+    }
   };
 
   // Xóa ảnh - chỉ xóa ở UI
@@ -228,35 +302,40 @@ const MediaEditor = () => {
       // 1. Xử lý upload ảnh mới nếu có
       if (pendingImageUpload) {
         try {
-          const uploadFormData = new FormData();
-          uploadFormData.append('featuredImage', pendingImageUpload);
+          console.log('🚀 Uploading new image to B2...');
           
-          const uploadResponse = await mediaService.uploadFeaturedImage(uploadFormData);
+          // Upload ảnh lên B2 sử dụng pre-signed URL
+          const uploadedImage = await uploadImageToB2(pendingImageUpload);
           
           submitData.featuredImage = {
-            url: uploadResponse.data.url,
-            key: uploadResponse.data.key,
-            filename: uploadResponse.data.filename,
-            size: uploadResponse.data.size,
-            uploaded_at: uploadResponse.data.uploaded_at
+            url: uploadedImage.url,
+            key: uploadedImage.key,
+            filename: uploadedImage.filename,
+            originalName: uploadedImage.originalName,
+            size: uploadedImage.size,
+            type: uploadedImage.type,
+            uploaded_at: uploadedImage.uploadedAt
           };
           
-          console.log('✅ Đã upload ảnh mới lên B2');
+          console.log('✅ New image uploaded to B2:', submitData.featuredImage);
           
           // 2. Xóa ảnh cũ nếu có và đã upload ảnh mới
           if (originalFeaturedImage && originalFeaturedImage.key) {
             try {
-              await mediaService.deleteFeaturedImage(originalFeaturedImage.key);
-              console.log('✅ Đã xóa ảnh cũ từ B2');
+              await deleteImageFromB2(originalFeaturedImage.key);
+              console.log('✅ Deleted old image from B2');
             } catch (deleteError) {
-              console.warn('⚠️ Không thể xóa ảnh cũ từ B2:', deleteError.message);
+              console.warn('⚠️ Could not delete old image from B2:', deleteError.message);
               // Vẫn tiếp tục vì đã có ảnh mới
             }
           }
           
+          // Clear pending upload
+          setPendingImageUpload(null);
+          
         } catch (uploadError) {
-          console.error('❌ Lỗi upload ảnh:', uploadError);
-          alert('Không thể upload ảnh lên server');
+          console.error('❌ Image upload failed:', uploadError);
+          alert('Không thể upload ảnh lên cloud storage');
           setLoading(false);
           return;
         }
@@ -267,12 +346,14 @@ const MediaEditor = () => {
         submitData.featuredImage = '';
         
         try {
-          await mediaService.deleteFeaturedImage(originalFeaturedImage.key);
-          console.log('✅ Đã xóa ảnh từ B2');
+          await deleteImageFromB2(originalFeaturedImage.key);
+          console.log('✅ Deleted image from B2');
         } catch (deleteError) {
-          console.warn('⚠️ Không thể xóa ảnh từ B2:', deleteError.message);
+          console.warn('⚠️ Could not delete image from B2:', deleteError.message);
           // Vẫn tiếp tục cập nhật bài viết
         }
+        
+        setPendingImageDeletion(false);
       }
       // 4. Giữ nguyên ảnh cũ nếu không có thay đổi
       else if (originalFeaturedImage && !pendingImageDeletion && !pendingImageUpload) {
@@ -289,7 +370,7 @@ const MediaEditor = () => {
         }
       }
 
-      console.log('📤 Submitting data:', submitData);
+      console.log('📤 Submitting media data:', submitData);
 
       // Gọi API lưu media
       if (isEditing) {
@@ -360,7 +441,8 @@ const MediaEditor = () => {
       return {
         url: getImageUrl(formData.featuredImage),
         filename: formData.featuredImage.filename || 'Ảnh tải lên',
-        isLocal: formData.featuredImage.isLocal || false
+        isLocal: formData.featuredImage.isLocal || false,
+        uploadPending: formData.featuredImage.uploadPending || false
       };
     }
     
@@ -568,7 +650,7 @@ const MediaEditor = () => {
                       />
                       {imageInfo.isLocal && (
                         <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
-                          Chưa upload
+                          {imageInfo.uploadPending ? 'Chờ upload' : 'Chưa upload'}
                         </div>
                       )}
                       {pendingImageDeletion && !imageInfo.isLocal && (
@@ -582,9 +664,10 @@ const MediaEditor = () => {
                       <button
                         type="button"
                         onClick={handleDeleteFeaturedImage}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
+                        disabled={imageUploading}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium disabled:bg-red-400"
                       >
-                        Xóa ảnh
+                        {imageUploading ? 'Đang xử lý...' : 'Xóa ảnh'}
                       </button>
                       
                       {pendingImageDeletion && !imageInfo.isLocal && (
@@ -595,7 +678,7 @@ const MediaEditor = () => {
                       
                       {imageInfo.isLocal && (
                         <div className="text-xs text-yellow-600 font-medium bg-yellow-50 p-2 rounded text-center">
-                          Ảnh sẽ được upload khi bạn nhấn "{isEditing ? 'Cập nhật' : 'Xuất bản'}"
+                          Ảnh sẽ được upload trực tiếp lên cloud khi bạn nhấn "{isEditing ? 'Cập nhật' : 'Xuất bản'}"
                         </div>
                       )}
                     </div>
@@ -622,6 +705,7 @@ const MediaEditor = () => {
                         e.target.value = ''; // Reset input
                       }}
                       className="hidden"
+                      disabled={imageUploading}
                     />
                     <label htmlFor="featuredImage" className="cursor-pointer">
                       <svg className={`w-12 h-12 ${errorMessage && !hasFeaturedImage() ? 'text-red-400' : 'text-gray-400'} mx-auto mb-3`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -789,66 +873,134 @@ const MediaManager = ({ onClose, editorRef }) => {
     }
   };
 
+  // Upload ảnh sử dụng pre-signed URLs
   const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length === 0 || !currentFolder) return;
+  const files = Array.from(event.target.files);
+  if (files.length === 0 || !currentFolder) return;
 
-    setUploading(true);
-    setError(null);
+  setUploading(true);
+  setError(null);
 
-    try {
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('images', file);
-      });
-
-      const response = await folderService.uploadImages(currentFolder._id, formData);
-      const newImages = response.data.uploadedImages;
-      setImages(prev => [...prev, ...newImages]);
-      
+  try {
+    console.log(`📤 Uploading ${files.length} files to folder: ${currentFolder.name}`);
+    
+    const uploadResult = await b2Service.uploadMultipleFiles(
+      files,
+      `folders/${currentFolder._id}`,
+      (percent) => {
+        console.log(`📊 Overall progress: ${percent}%`);
+        // Update progress bar if needed
+      }
+    );
+    
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.message);
+    }
+    
+    console.log('✅ Upload results:', {
+      total: uploadResult.data.total,
+      successful: uploadResult.data.successful,
+      failed: uploadResult.data.failed
+    });
+    
+    // Save successful uploads to database
+    const savedImages = [];
+    
+    for (const fileData of uploadResult.data.files) {
+      try {
+        const imageData = {
+          url: fileData.url,
+          key: fileData.key,
+          filename: fileData.filename,
+          size: fileData.size
+        };
+        
+        const saveResponse = await folderService.uploadImageToFolder(
+          currentFolder._id,
+          imageData
+        );
+        
+        savedImages.push(saveResponse.data);
+        
+      } catch (saveError) {
+        console.error('❌ Failed to save image to database:', saveError);
+        // Continue with other images
+      }
+    }
+    
+    // Update UI
+    if (savedImages.length > 0) {
+      setImages(prev => [...prev, ...savedImages]);
       setFolders(prev => prev.map(folder => 
         folder._id === currentFolder._id 
           ? { 
               ...folder, 
-              images: [...(folder.images || []), ...newImages]
+              images: [...(folder.images || []), ...savedImages]
             }
           : folder
       ));
-
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      setError('Không thể tải ảnh lên');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
+      
+      console.log(`🎉 Successfully saved ${savedImages.length} images to database`);
     }
-  };
+    
+    // Show errors if any
+    if (uploadResult.data.errors && uploadResult.data.errors.length > 0) {
+      const errorMessages = uploadResult.data.errors.map(e => `${e.filename}: ${e.error}`).join(', ');
+      console.warn('⚠️ Some files failed:', errorMessages);
+      // Optionally show warning to user
+    }
+    
+  } catch (error) {
+    console.error('❌ Upload process failed:', error);
+    setError(`Upload failed: ${error.message}`);
+  } finally {
+    setUploading(false);
+    event.target.value = ''; // Reset input
+  }
+};
 
   const handleDeleteImage = async (imageId, event) => {
-    event?.stopPropagation();
-    if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
-      return;
-    }
+  event?.stopPropagation();
+  if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
+    return;
+  }
 
-    try {
-      await folderService.deleteImage(currentFolder._id, imageId);
+  try {
+    // Get image info to get the B2 key
+    const imageToDelete = images.find(img => img._id === imageId);
+    
+    if (imageToDelete && imageToDelete.key) {
+      // Delete from B2 via proxy
+      const deleteResult = await b2Service.deleteFile(imageToDelete.key);
       
-      setImages(prev => prev.filter(img => img._id !== imageId));
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.message);
+      }
       
-      setFolders(prev => prev.map(folder => 
-        folder._id === currentFolder._id 
-          ? { 
-              ...folder, 
-              images: folder.images?.filter(img => img._id !== imageId) || []
-            }
-          : folder
-      ));
-
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      setError('Không thể xóa ảnh');
+      console.log('🗑️ Deleted image from B2:', imageToDelete.key);
     }
-  };
+    
+    // Delete from database
+    await folderService.deleteImage(currentFolder._id, imageId);
+    
+    // Update UI
+    setImages(prev => prev.filter(img => img._id !== imageId));
+    setFolders(prev => prev.map(folder => 
+      folder._id === currentFolder._id 
+        ? { 
+            ...folder, 
+            images: folder.images?.filter(img => img._id !== imageId) || []
+          }
+        : folder
+    ));
+    
+    console.log('✅ Image deleted successfully');
+
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    setError('Không thể xóa ảnh');
+  }
+};
 
   const handleImageSelect = (image) => {
     if (editorRef.current) {
@@ -858,7 +1010,7 @@ const MediaManager = ({ onClose, editorRef }) => {
       editor.execCommand('mceInsertContent', false, `
         <img 
           src="${imageUrl}" 
-          alt="${image.originalName}" 
+          alt="${image.filename}" 
           style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;"
           data-image-id="${image._id}"
         />
@@ -899,7 +1051,7 @@ const MediaManager = ({ onClose, editorRef }) => {
           )}
           <img
             src={imgError ? '/images/placeholder.jpg' : getImageUrl(image.url)}
-            alt={image.originalName}
+            alt={image.filename}
             className="w-full h-full object-cover"
             onError={handleImageError}
             onLoad={handleImageLoad}

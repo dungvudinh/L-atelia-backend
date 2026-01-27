@@ -1,16 +1,11 @@
-// services/folderService.js
+// services/folderService.js - UPDATED
 import axiosClient from "../configs/axios";
 
 export const folderService = {
   // Get all folders
   getFolders: async () => {
     try {
-      console.log('📋 Fetching folders');
-      
       const response = await axiosClient.get('/v1/folders');
-      console.log('✅ Folders fetched successfully:', response.data);
-      
-      // Trả về data trực tiếp, không dùng .flat
       return response.data;
     } catch (error) {
       console.error('❌ Error in getFolders service:', error);
@@ -21,11 +16,7 @@ export const folderService = {
   // Get folder by ID
   getFolderById: async (id) => {
     try {
-      console.log(`📋 Fetching folder with ID: ${id}`);
-      
       const response = await axiosClient.get(`/v1/folders/${id}`);
-      console.log('✅ Folder fetched successfully');
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error in getFolderById service:', error);
@@ -36,11 +27,7 @@ export const folderService = {
   // Create folder
   createFolder: async (folderData) => {
     try {
-      console.log('🔄 Creating folder:', folderData);
-      
       const response = await axiosClient.post('/v1/folders', folderData);
-      console.log('✅ Folder created successfully');
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error in createFolder service:', error);
@@ -51,11 +38,7 @@ export const folderService = {
   // Update folder
   updateFolder: async (id, folderData) => {
     try {
-      console.log(`🔄 Updating folder with ID: ${id}`);
-      
       const response = await axiosClient.put(`/v1/folders/${id}`, folderData);
-      console.log('✅ Folder updated successfully');
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error in updateFolder service:', error);
@@ -66,11 +49,7 @@ export const folderService = {
   // Delete folder
   deleteFolder: async (id) => {
     try {
-      console.log(`🗑️ Deleting folder with ID: ${id}`);
-      
       const response = await axiosClient.delete(`/v1/folders/${id}`);
-      console.log('✅ Folder deleted successfully');
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error in deleteFolder service:', error);
@@ -78,7 +57,7 @@ export const folderService = {
     }
   },
 
-  // Upload images to folder
+  // Upload images to folder using pre-signed URLs
   uploadImages: async (folderId, formData) => {
     try {
       console.log(`🔄 Uploading images to folder: ${folderId}`);
@@ -93,6 +72,21 @@ export const folderService = {
       return response.data;
     } catch (error) {
       console.error('❌ Error in uploadImages service:', error);
+      throw error;
+    }
+  },
+
+  // NEW: Upload single image info (after direct B2 upload)
+  uploadImageToFolder: async (folderId, imageData) => {
+    try {
+      console.log(`🖼️ Saving image info to folder: ${folderId}`, imageData);
+      
+      const response = await axiosClient.post(`/v1/folders/${folderId}/images`, imageData);
+      
+      console.log('✅ Image info saved successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error in uploadImageToFolder service:', error);
       throw error;
     }
   },
