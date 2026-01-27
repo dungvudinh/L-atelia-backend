@@ -7,7 +7,7 @@ const API_BASE_URL = 'https://l-atelia-api-yct5.onrender.com';
 // Tạo axios instance đơn giản
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000,
   withCredentials: false, // QUAN TRỌNG: Đặt false cho cross-origin
   headers: {
     'Content-Type': 'application/json',
