@@ -5,6 +5,7 @@ import MainLayout from './layouts/MainLayout'
 import { privateRoutes, publicRoutes } from './routes'
 import authService from './services/authService'
 import usePermission from './hooks/usePermission'
+import Loading from './components/Loading'
 
 // Component wrapper cho private routes
 const PrivateRoute = ({ children, path }) => {
@@ -151,6 +152,7 @@ function App() {
           </MainLayout>
         } />
       </Routes>
+      <Loading />
     </>
   )
 }

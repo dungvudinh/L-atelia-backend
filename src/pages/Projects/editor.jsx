@@ -175,11 +175,19 @@ export default function ProjectEditor() {
     const imagesData = Array.isArray(selectedImages) 
       ? selectedImages.map(img => ({
           url: img.url,
-          uploaded_at: new Date()
+          key: img.key || img._id,
+          filename: img.originalName || img.filename,
+          uploaded_at: new Date(),
+          size: img.size,
+          type: img.mimetype || 'image/*'
         }))
       : [{
           url: selectedImages.url,
-          uploaded_at: new Date()
+          key: selectedImages.key || selectedImages._id,
+          filename: selectedImages.originalName || selectedImages.filename,
+          uploaded_at: new Date(),
+          size: selectedImages.size,
+          type: selectedImages.mimetype || 'image/*'
         }];
 
     if (type === 'heroImage') {
@@ -195,7 +203,7 @@ export default function ProjectEditor() {
 
       // Cập nhật preview
       imagesData.forEach(imageData => {
-        const previewUrl = imageData.url;
+        const previewUrl = getImageUrl(imageData);
         switch (type) {
           case 'gallery':
             setGalleryPreview(prev => [...prev, previewUrl]);
@@ -209,8 +217,8 @@ export default function ProjectEditor() {
           case 'brochure':
             setBrochurePreview(prev => [...prev, {
               url: previewUrl,
-              name: previewUrl.split('/').pop() || 'brochure.pdf',
-              type: previewUrl.endsWith('.pdf') ? 'application/pdf' : 'image/*'
+              name: imageData.filename || 'brochure.pdf',
+              type: imageData.type || 'image/*'
             }]);
             break;
         }
@@ -513,14 +521,14 @@ export default function ProjectEditor() {
         specifications: project.specifications.filter(s => s.text.trim()),
         propertyHighlights: project.propertyHighlights,
         specialSections: project.specialSections,
-        heroImage: project.heroImage.url ? { url: project.heroImage.url } : null,
-        gallery: project.gallery.map(img => ({ url: img.url })),
-        constructionProgress: project.constructionProgress.map(img => ({ url: img.url })),
-        designImages: project.designImages.map(img => ({ url: img.url })),
-        brochure: project.brochure.map(doc => ({ url: doc.url }))
+        heroImage: project.heroImage,
+        gallery: project.gallery,
+        constructionProgress: project.constructionProgress,
+        designImages: project.designImages,
+        brochure: project.brochure
       };
       
-      console.log('📤 Sending project data (JSON):', projectData);
+      console.log('Sending project data (JSON):', projectData);
       
       let result;
       if (isEditMode) {

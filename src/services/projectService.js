@@ -1,6 +1,7 @@
 // services/projectService.js
 import axiosClient from "../configs/axios";
 
+
 export const projectService = {
   getProjects: async (params = {}) => {
     try {
@@ -29,6 +30,7 @@ export const projectService = {
       console.log('✅ Project created successfully');
       return response.data;
     } catch (error) {
+      console.error('❌ Error in createProject service:', error);
       console.error('❌ Error in createProject service:', error);
       throw error;
     }
@@ -77,4 +79,4 @@ export const projectService = {
       throw error;
     }
   }
-};
+}
