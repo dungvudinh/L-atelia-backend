@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Eye, Calendar, FolderOpen, Image, MapPin } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import { useDispatch, useSelector } from 'react-redux';
+
 const Projects = () => {
   const {isLoading} = useSelector(state=>state.loading)
   const dispatch = useDispatch()
@@ -14,6 +15,14 @@ const Projects = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedItems, setSelectedItems] = useState([]);
   const [deleteLoading, setDeleteLoading] = useState(null);
+  
+  // ✅ State để lưu thống kê thumbnail
+  const [thumbnailStats, setThumbnailStats] = useState({
+    total: 0,
+    withThumbnails: 0,
+    percentage: 0
+  });
+
   // Fetch projects from API
   const fetchProjects = async () => {
     try {
@@ -23,7 +32,11 @@ const Projects = () => {
       console.log('API Response:', response);
       
       if (response.success) {
-        setProjects(response.data.projects || []);
+        const projectsData = response.data.projects || [];
+        setProjects(projectsData);
+        
+        // ✅ Tính thống kê thumbnail
+        calculateThumbnailStats(projectsData);
       } else {
         throw new Error(response.message || 'Failed to fetch projects');
       }
@@ -35,130 +48,160 @@ const Projects = () => {
     }
   };
 
+  // ✅ Hàm tính thống kê thumbnail
+  const calculateThumbnailStats = (projectsData) => {
+    const totalProjects = projectsData.length;
+    const withThumbnails = projectsData.filter(project => 
+      project.heroImage && project.heroImage.thumbnailUrl
+    ).length;
+    
+    setThumbnailStats({
+      total: totalProjects,
+      withThumbnails: withThumbnails,
+      percentage: totalProjects > 0 ? Math.round((withThumbnails / totalProjects) * 100) : 0
+    });
+  };
+
   useEffect(() => {
     fetchProjects();
   }, []);
 
-      // Hàm xử lý hiển thị ảnh
-    // Hàm xử lý hiển thị ảnh - SỬA LẠI
-    const getImageUrl = (imagePath) => {
-      if (!imagePath) return null;
-      
-      console.log('Original image path:', imagePath);
-      
-      // Nếu là URL đầy đủ (http/https) hoặc data URL
-      if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-        return imagePath;
+  // ✅ Hàm lấy URL ảnh - ƯU TIÊN THUMBNAIL CHO DANH SÁCH
+  const getImageUrl = (imageData, preferThumbnail = true) => {
+    if (!imageData) return null;
+    
+    // Nếu imageData là string (URL cũ)
+    if (typeof imageData === 'string') {
+      if (imageData.startsWith('http') || imageData.startsWith('https')) {
+        return imageData;
       }
       
-      // Nếu là đường dẫn tương đối
       const baseUrl = 'http://localhost:3000';
-      
-      // Xử lý đường dẫn Windows (có backslash)
-      const normalizedPath = imagePath.replace(/\\/g, '/');
-      
-      // Đảm bảo có slash ở giữa
+      const normalizedPath = imageData.replace(/\\/g, '/');
       let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
       
-      console.log('Final image URL:', finalUrl);
       return finalUrl;
-    };
-
-  // Hàm xử lý lỗi ảnh
-  const handleImageError = (e) => {
-    e.target.src = '/api/placeholder/40/40'; // Fallback image
-    e.target.alt = 'Image not available';
+    }
+    
+    // Nếu imageData là object (có thumbnailUrl)
+    if (typeof imageData === 'object' && imageData !== null) {
+      // Ưu tiên thumbnailUrl nếu có và preferThumbnail = true
+      if (preferThumbnail && imageData.thumbnailUrl) {
+        return imageData.thumbnailUrl;
+      }
+      
+      // Fallback về url gốc nếu không có thumbnail
+      if (imageData.url) {
+        return imageData.url;
+      }
+    }
+    
+    return null;
   };
 
-      // Hàm hiển thị ảnh thumbnail
-      // Hàm hiển thị ảnh thumbnail - SỬA LẠI
-      const renderThumbnail = (project) => {
-        
-        const imageUrl = project.heroImage != null ? getImageUrl(project.heroImage.url) : null;
-        
-        if (imageUrl) {
-          return (
-            <img 
-              src={imageUrl} 
-              alt={project.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                console.error('Image failed to load:', imageUrl);
-                e.target.src = 'https://via.placeholder.com/40x40?text=Error';
-              }}
-              onLoad={() => console.log('Image loaded:', project.title)}
-              loading="lazy"
-            />
-          );
-        } else {
-          return (
-            <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-              <Image size={16} className="text-gray-500" />
-            </div>
-          );
-        }
-      };
-
-    // Handle delete project
-    // Handle delete project - SỬA LẠI
-    const handleDelete = async (projectId) => {
-      if (!window.confirm('Bạn có chắc muốn xóa dự án này?')) {
-        return;
-      }
+  // ✅ Hàm hiển thị ảnh thumbnail - SỬ DỤNG THUMBNAIL CHO DANH SÁCH
+  const renderThumbnail = (project) => {
+    const imageData = project.heroImage;
     
-      try {
-        setDeleteLoading(projectId);
-        
-        const response = await projectService.deleteProject(projectId);
-        
-        if (response.success) {
-          setProjects(prevProjects => prevProjects.filter(p => p._id !== projectId));
-          setSelectedItems(prevSelected => prevSelected.filter(id => id !== projectId));
-          alert('Xóa dự án thành công');
-        } else {
-          throw new Error(response.message || 'Failed to delete project');
-        }
-      } catch (err) {
-        console.error('Error deleting project:', err);
-        const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa dự án';
-        alert(`Lỗi: ${errorMessage}`);
-      } finally {
-        setDeleteLoading(null);
-      }
-    };
-    // Handle bulk delete - THÊM HÀM NÀY
-    const handleBulkDelete = async () => {
-      if (selectedItems.length === 0) {
-        alert('Vui lòng chọn ít nhất một dự án để xóa');
-        return;
-      }
+    // Ưu tiên thumbnail cho danh sách
+    const displayUrl = imageData ? getImageUrl(imageData, true) : null;
+    
+    if (displayUrl) {
+      return (
+        <div className="relative w-full h-full">
+          <img 
+            src={displayUrl} 
+            alt={project.title}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('Thumbnail failed to load:', displayUrl);
+              // Fallback về ảnh gốc nếu thumbnail lỗi
+              if (imageData && imageData.url && imageData.thumbnailUrl && displayUrl === imageData.thumbnailUrl) {
+                console.log('Thumbnail failed, falling back to original...');
+                e.target.src = getImageUrl(imageData, false);
+              } else {
+                e.target.src = 'https://via.placeholder.com/40x40?text=Error';
+              }
+            }}
+            onLoad={() => console.log('Thumbnail loaded successfully:', project.title)}
+            loading="lazy"
+          />
+          
+          {/* ✅ Badge hiển thị đang xem thumbnail */}
+          {/* {imageData && imageData.thumbnailUrl && displayUrl === imageData.thumbnailUrl && (
+            <span className="absolute bottom-1 right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+              Thumb
+            </span>
+          )} */}
+        </div>
+      );
+    } else {
+      return (
+        <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+          <Image size={16} className="text-gray-500" />
+        </div>
+      );
+    }
+  };
 
-      if (!window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} dự án đã chọn?`)) {
-        return;
-      }
+  // Handle delete project
+  const handleDelete = async (projectId) => {
+    if (!window.confirm('Bạn có chắc muốn xóa dự án này?')) {
+      return;
+    }
 
-      try {
-        console.log(`Bulk deleting projects:`, selectedItems);
-        
-        // Nếu có API bulk delete
-        // await projectService.bulkDeleteProjects(selectedItems);
-        
-        // Hoặc xóa từng cái một
-        const deletePromises = selectedItems.map(id => projectService.deleteProject(id));
-        await Promise.all(deletePromises);
-        
-        // Cập nhật UI sau khi xóa thành công
-        setProjects(prevProjects => prevProjects.filter(p => !selectedItems.includes(p._id)));
-        setSelectedItems([]);
-        
-        alert(`Đã xóa ${selectedItems.length} dự án thành công`);
-      } catch (err) {
-        console.error('Error bulk deleting projects:', err);
-        
-        const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa các dự án';
-        alert(`Lỗi: ${errorMessage}`);
+    try {
+      setDeleteLoading(projectId);
+      
+      const response = await projectService.deleteProject(projectId);
+      
+      if (response.success) {
+        setProjects(prevProjects => prevProjects.filter(p => p._id !== projectId));
+        setSelectedItems(prevSelected => prevSelected.filter(id => id !== projectId));
+        alert('Xóa dự án thành công');
+      } else {
+        throw new Error(response.message || 'Failed to delete project');
       }
-    };
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa dự án';
+      alert(`Lỗi: ${errorMessage}`);
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedItems.length === 0) {
+      alert('Vui lòng chọn ít nhất một dự án để xóa');
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedItems.length} dự án đã chọn?`)) {
+      return;
+    }
+
+    try {
+      console.log(`Bulk deleting projects:`, selectedItems);
+      
+      // Hoặc xóa từng cái một
+      const deletePromises = selectedItems.map(id => projectService.deleteProject(id));
+      await Promise.all(deletePromises);
+      
+      // Cập nhật UI sau khi xóa thành công
+      setProjects(prevProjects => prevProjects.filter(p => !selectedItems.includes(p._id)));
+      setSelectedItems([]);
+      
+      alert(`Đã xóa ${selectedItems.length} dự án thành công`);
+    } catch (err) {
+      console.error('Error bulk deleting projects:', err);
+      
+      const errorMessage = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi xóa các dự án';
+      alert(`Lỗi: ${errorMessage}`);
+    }
+  };
+
   // Filter projects
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -244,10 +287,18 @@ const Projects = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý Dự án</h1>
           <p className="text-gray-600">Tổng số: {filteredProjects.length} dự án</p>
+          
+          {/* ✅ Hiển thị thống kê thumbnail */}
+          <div className="mt-1 flex items-center gap-2 text-sm">
+            <span className="text-green-600 font-medium">
+              ✓ {thumbnailStats.withThumbnails}/{thumbnailStats.total} dự án có thumbnail
+            </span>
+            <span className="text-gray-400">({thumbnailStats.percentage}%)</span>
+          </div>
         </div>
         <div className="flex items-center space-x-3">
           {selectedItems.length > 0 && (
@@ -348,7 +399,7 @@ const Projects = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0 relative">
                         {renderThumbnail(project)}
                       </div>
                       <div className="ml-4">
@@ -356,10 +407,24 @@ const Projects = () => {
                           <h4 className="text-sm font-semibold text-gray-900">
                             {project.title || 'Chưa có tiêu đề'}
                           </h4>
+                          {/* ✅ Badge cho dự án có thumbnail */}
+                          {/* {project.heroImage && project.heroImage.thumbnailUrl && (
+                            <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                              Thumbnail
+                            </span>
+                          )} */}
                         </div>
-                        {/* <p className="text-sm text-gray-500 line-clamp-1 mt-1">
-                          {project.description || 'Chưa có mô tả'}
-                        </p> */}
+                        {/* ✅ Hiển thị kích thước thumbnail nếu có */}
+                        {/* {project.heroImage && project.heroImage.thumbnailSize && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Thumbnail: {(project.heroImage.thumbnailSize / 1024).toFixed(0)}KB
+                            {project.heroImage.size && (
+                              <span className="text-gray-400 ml-1">
+                                (gốc: {(project.heroImage.size / 1024).toFixed(0)}KB)
+                              </span>
+                            )}
+                          </p>
+                        )} */}
                       </div>
                     </div>
                   </td>
@@ -398,8 +463,13 @@ const Projects = () => {
                         onClick={() => handleDelete(project._id)}
                         className="text-red-600 hover:text-red-900 transition-colors p-1 rounded hover:bg-red-50"
                         title="Xóa dự án"
+                        disabled={deleteLoading === project._id}
                       >
-                        <Trash2 size={16} />
+                        {deleteLoading === project._id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
                       </button>
                     </div>
                   </td>

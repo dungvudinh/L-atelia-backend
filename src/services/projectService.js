@@ -3,9 +3,15 @@ import axiosClient from "../configs/axios";
 
 
 export const projectService = {
-  getProjects: async (params = {}) => {
+   getProjects: async (params = {}) => {
     try {
-      const response = await axiosClient.get('/v1/projects', { params });
+      // Thêm fields để lấy đủ thumbnail data
+      const response = await axiosClient.get('/v1/projects', { 
+        params: {
+          ...params,
+          fields: 'title,location,status,createdAt,heroImage.url,heroImage.thumbnailUrl,heroImage.thumbnailSize,heroImage.size,heroImage.hasThumbnail'
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('❌ Error in getProjects service:', error);

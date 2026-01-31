@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, Search, Edit, Trash2, Eye, Calendar, 
@@ -24,6 +24,10 @@ const Media = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [paginationLoading, setPaginationLoading] = useState(false);
 
+  // Refs để theo dõi ảnh đã tải
+  const loadedImagesRef = useRef(new Set());
+  const imageLoadingTimeoutsRef = useRef({});
+
   // Fetch media from API with pagination
   const fetchMedia = async (page = currentPage) => {
     try {
@@ -46,7 +50,6 @@ const Media = () => {
       if (filterStatus !== 'all') params.status = filterStatus;
       
       const response = await mediaService.getMedia(params);
-      console.log('Media API response:', response);
       
       if (response.success) {
         setMedia(response.data || []);
@@ -80,7 +83,6 @@ const Media = () => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
     fetchMedia(page);
-    // Scroll to top of table
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -91,27 +93,135 @@ const Media = () => {
     setCurrentPage(1);
   };
 
-  // Hàm xử lý hiển thị ảnh
-  const renderThumbnail = (mediaItem) => {
-    if (mediaItem.featuredImage?.url) {
+  // Custom Image Component với loading state
+  const MediaImage = ({ mediaItem }) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
+    const imgRef = useRef(null);
+
+    useEffect(() => {
+      const imageData = mediaItem.featuredImage;
+      if (!imageData || !imageData.url) {
+        setIsLoading(false);
+        setHasError(true);
+        return;
+      }
+
+      const displayUrl = imageData.thumbnailUrl || imageData.url;
+      
+      // Nếu ảnh đã được tải trước đó, bỏ qua loading
+      if (loadedImagesRef.current.has(displayUrl)) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Đặt timeout để tránh loading vĩnh viễn
+      const timeoutId = setTimeout(() => {
+        if (isLoading) {
+          console.warn(`Image load timeout: ${displayUrl.substring(0, 50)}...`);
+          setIsLoading(false);
+          loadedImagesRef.current.add(displayUrl); // Thêm vào cache dù timeout
+        }
+      }, 5000); // 5 giây timeout
+
+      // Lưu timeout ID để dọn dẹp
+      imageLoadingTimeoutsRef.current[mediaItem._id] = timeoutId;
+
+      return () => {
+        if (imageLoadingTimeoutsRef.current[mediaItem._id]) {
+          clearTimeout(imageLoadingTimeoutsRef.current[mediaItem._id]);
+          delete imageLoadingTimeoutsRef.current[mediaItem._id];
+        }
+      };
+    }, [mediaItem._id, mediaItem.featuredImage]);
+
+    const handleImageLoad = () => {
+      const imageData = mediaItem.featuredImage;
+      if (!imageData || !imageData.url) return;
+      
+      const displayUrl = imageData.thumbnailUrl || imageData.url;
+      
+      // Clear timeout nếu có
+      if (imageLoadingTimeoutsRef.current[mediaItem._id]) {
+        clearTimeout(imageLoadingTimeoutsRef.current[mediaItem._id]);
+        delete imageLoadingTimeoutsRef.current[mediaItem._id];
+      }
+      
+      // Thêm vào cache và cập nhật state
+      loadedImagesRef.current.add(displayUrl);
+      setIsLoading(false);
+    };
+
+    const handleImageError = (e) => {
+      const imageData = mediaItem.featuredImage;
+      if (!imageData) return;
+      
+      console.error('Image failed to load:', imageData.thumbnailUrl || imageData.url);
+      
+      // Clear timeout
+      if (imageLoadingTimeoutsRef.current[mediaItem._id]) {
+        clearTimeout(imageLoadingTimeoutsRef.current[mediaItem._id]);
+        delete imageLoadingTimeoutsRef.current[mediaItem._id];
+      }
+      
+      setHasError(true);
+      setIsLoading(false);
+      
+      // Fallback logic
+      if (imageData.thumbnailUrl && imageData.url && e.target.src !== imageData.url) {
+        e.target.src = imageData.url;
+        setHasError(false);
+        setIsLoading(true);
+      } else {
+        e.target.src = 'https://via.placeholder.com/40x40?text=Error';
+      }
+    };
+
+    if (!mediaItem.featuredImage || !mediaItem.featuredImage.url || hasError) {
       return (
-        <img 
-          src={mediaItem.featuredImage.url} 
-          alt={mediaItem.title}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            e.target.src = 'https://via.placeholder.com/40x40?text=Error';
-          }}
-          loading="lazy"
-        />
-      );
-    } else {
-      return (
-        <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+        <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg">
           <FileText size={16} className="text-gray-500" />
         </div>
       );
     }
+
+    const displayUrl = mediaItem.featuredImage.thumbnailUrl || mediaItem.featuredImage.url;
+
+    return (
+      <>
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+        <img 
+          ref={imgRef}
+          src={displayUrl} 
+          alt={mediaItem.title || 'Media image'}
+          className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          loading="lazy"
+          decoding="async"
+        />
+      </>
+    );
+  };
+
+  // Hàm xử lý hiển thị ảnh - ĐƠN GIẢN HÓA
+  const renderThumbnail = (mediaItem) => {
+    return (
+      <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0 relative">
+        <MediaImage mediaItem={mediaItem} />
+        {/* {mediaItem.featuredImage?.hasThumbnail && (
+          <span className="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 py-0.5 rounded-bl-lg">
+            Thumb
+          </span>
+        )} */}
+      </div>
+    );
   };
 
   // Handle delete media
@@ -126,7 +236,6 @@ const Media = () => {
       const response = await mediaService.deleteMedia(mediaId);
       
       if (response.success) {
-        // Refetch current page data
         fetchMedia(currentPage);
         setSelectedItems(prev => prev.filter(id => id !== mediaId));
         alert('Xóa bài viết thành công');
@@ -154,11 +263,9 @@ const Media = () => {
     }
 
     try {
-      // Xóa từng cái một
       const deletePromises = selectedItems.map(id => mediaService.deleteMedia(id));
       await Promise.all(deletePromises);
       
-      // Refetch current page data
       fetchMedia(currentPage);
       setSelectedItems([]);
       
@@ -319,7 +426,9 @@ const Media = () => {
           </td>
           <td className="px-6 py-4">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+              <div className="w-10 h-10 bg-gray-200 rounded-lg relative">
+                <div className="absolute top-0 right-0 w-3 h-3 bg-green-200 rounded-full"></div>
+              </div>
               <div className="ml-4 space-y-2">
                 <div className="h-4 w-48 bg-gray-200 rounded"></div>
                 <div className="h-3 w-32 bg-gray-200 rounded"></div>
@@ -511,18 +620,26 @@ const Media = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                          {renderThumbnail(mediaItem)}
-                        </div>
+                        {renderThumbnail(mediaItem)}
                         <div className="ml-4">
                           <div className="flex items-center space-x-2">
                             <h4 className="text-sm font-semibold text-gray-900 max-w-xs truncate">
                               {mediaItem.title || 'Chưa có tiêu đề'}
                             </h4>
+                            {/* {mediaItem.featuredImage?.hasThumbnail && (
+                              <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                                ✓ Thumb
+                              </span>
+                            )} */}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             {mediaItem.excerpt ? truncateContent(mediaItem.excerpt, 50) : 'Chưa có mô tả'}
                           </p>
+                          {mediaItem.featuredImage?.thumbnailSize > 0 && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Thumbnail: {(mediaItem.featuredImage.thumbnailSize / 1024).toFixed(0)}KB
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -641,7 +758,7 @@ const Media = () => {
 
 export default Media;
 
-// Helper functions (keep them at the bottom)
+// Helper functions
 const getStatusBadge = (status) => {
   const statusConfig = {
     published: { color: 'bg-green-100 text-green-800', label: 'Đã đăng' },
@@ -685,12 +802,10 @@ const formatDate = (dateString) => {
 const truncateContent = (content, length = 100) => {
   if (!content) return 'Chưa có nội dung';
   
-  // Remove HTML tags và decode HTML entities
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = content;
   let text = tempDiv.textContent || tempDiv.innerText || '';
   
-  // Trim và xử lý khoảng trắng
   text = text.trim().replace(/\s+/g, ' ');
   
   return text.length > length ? text.substring(0, length) + '...' : text;

@@ -91,6 +91,7 @@ export default function ProjectEditor() {
   }, [isDirty]);
 
   // Load project data
+  console.log('PROJECT DETAIL', project);
   const loadProject = async (id) => {
     try {
       setIsProcessing(true);
@@ -170,64 +171,70 @@ export default function ProjectEditor() {
 
   // Xử lý khi chọn ảnh từ FolderManager
   const handleSelectImagesFromFolder = (type, selectedImages) => {
-    if (!selectedImages || selectedImages.length === 0) return;
+  if (!selectedImages || selectedImages.length === 0) return;
 
-    const imagesData = Array.isArray(selectedImages) 
-      ? selectedImages.map(img => ({
-          url: img.url,
-          key: img.key || img._id,
-          filename: img.originalName || img.filename,
-          uploaded_at: new Date(),
-          size: img.size,
-          type: img.mimetype || 'image/*'
-        }))
-      : [{
-          url: selectedImages.url,
-          key: selectedImages.key || selectedImages._id,
-          filename: selectedImages.originalName || selectedImages.filename,
-          uploaded_at: new Date(),
-          size: selectedImages.size,
-          type: selectedImages.mimetype || 'image/*'
-        }];
+  const imagesData = Array.isArray(selectedImages) 
+    ? selectedImages.map(img => ({
+        url: img.url,
+        thumbnailUrl: img.thumbnailUrl || null, // ✅ Lưu thumbnailUrl
+        key: img.key,
+        thumbnailKey: img.thumbnailKey || null, // ✅ Lưu thumbnailKey
+        filename: img.originalName || img.filename,
+        uploaded_at: new Date(),
+        size: img.size || 0,
+        thumbnailSize: img.thumbnailSize || 0,
+        hasThumbnail: img.hasThumbnail || false
+      }))
+    : [{
+        url: selectedImages.url,
+        thumbnailUrl: selectedImages.thumbnailUrl || null,
+        key: selectedImages.key,
+        thumbnailKey: selectedImages.thumbnailKey || null,
+        filename: selectedImages.originalName || selectedImages.filename,
+        uploaded_at: new Date(),
+        size: selectedImages.size || 0,
+        thumbnailSize: selectedImages.thumbnailSize || 0,
+        hasThumbnail: selectedImages.hasThumbnail || false
+      }];
 
-    if (type === 'heroImage') {
-      // Xử lý heroImage (chỉ 1 ảnh)
-      const imageData = imagesData[0];
-      setProject(prev => ({ ...prev, heroImage: imageData }));
-    } else {
-      // Xử lý các loại ảnh khác (nhiều ảnh)
-      setProject(prev => ({ 
-        ...prev, 
-        [type]: [...prev[type], ...imagesData] 
-      }));
+  if (type === 'heroImage') {
+    // Xử lý heroImage (chỉ 1 ảnh)
+    const imageData = imagesData[0];
+    setProject(prev => ({ ...prev, heroImage: imageData }));
+  } else {
+    // Xử lý các loại ảnh khác (nhiều ảnh)
+    setProject(prev => ({ 
+      ...prev, 
+      [type]: [...prev[type], ...imagesData] 
+    }));
 
-      // Cập nhật preview
-      imagesData.forEach(imageData => {
-        const previewUrl = getImageUrl(imageData);
-        switch (type) {
-          case 'gallery':
-            setGalleryPreview(prev => [...prev, previewUrl]);
-            break;
-          case 'constructionProgress':
-            setProgressPreview(prev => [...prev, previewUrl]);
-            break;
-          case 'designImages':
-            setDesignPreview(prev => [...prev, previewUrl]);
-            break;
-          case 'brochure':
-            setBrochurePreview(prev => [...prev, {
-              url: previewUrl,
-              name: imageData.filename || 'brochure.pdf',
-              type: imageData.type || 'image/*'
-            }]);
-            break;
-        }
-      });
-    }
+    // Cập nhật preview - HIỂN THỊ THUMBNAIL TRONG EDITOR
+    imagesData.forEach(imageData => {
+      const previewUrl = imageData.thumbnailUrl || imageData.url; // ✅ Ưu tiên thumbnail
+      switch (type) {
+        case 'gallery':
+          setGalleryPreview(prev => [...prev, previewUrl]);
+          break;
+        case 'constructionProgress':
+          setProgressPreview(prev => [...prev, previewUrl]);
+          break;
+        case 'designImages':
+          setDesignPreview(prev => [...prev, previewUrl]);
+          break;
+        case 'brochure':
+          setBrochurePreview(prev => [...prev, {
+            url: previewUrl,
+            name: imageData.filename || 'brochure.pdf',
+            type: imageData.type || 'image/*'
+          }]);
+          break;
+      }
+    });
+  }
 
-    setIsDirty(true);
-    closeFolderManager(type);
-  };
+  setIsDirty(true);
+  closeFolderManager(type);
+};
 
   // Xóa ảnh đã chọn
   const removeImage = (type, index = null) => {
@@ -295,25 +302,32 @@ export default function ProjectEditor() {
 
   // Hàm getImageUrl
   const getImageUrl = (imageData) => {
-    if (!imageData) return null;
-    
-    if (typeof imageData === 'object' && imageData.url) {
-      const url = imageData.url;
-      if (url.startsWith('http') || url.startsWith('https')) {
-        return url;
-      }
-      // Normalize path
-      const normalizedPath = url.replace(/\\/g, '/');
-      const baseUrl = 'http://localhost:3000';
-      return `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+  if (!imageData) return null;
+  
+  // Nếu imageData là object có thumbnail, ưu tiên thumbnail
+  if (typeof imageData === 'object' && imageData.thumbnailUrl) {
+    console.log('Using thumbnail for preview:', imageData.thumbnailUrl);
+    return imageData.thumbnailUrl;
+  }
+  
+  // Fallback về url gốc
+  if (typeof imageData === 'object' && imageData.url) {
+    const url = imageData.url;
+    if (url.startsWith('http') || url.startsWith('https')) {
+      return url;
     }
-    
-    if (typeof imageData === 'string') {
-      return imageData;
-    }
-    
-    return null;
-  };
+    // Normalize path
+    const normalizedPath = url.replace(/\\/g, '/');
+    const baseUrl = 'http://localhost:3000';
+    return `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+  }
+  
+  if (typeof imageData === 'string') {
+    return imageData;
+  }
+  
+  return null;
+};
 
   // ========== CÁC HÀM XỬ LÝ CHO THÔNG TIN CHI TIẾT ==========
 
@@ -482,7 +496,63 @@ export default function ProjectEditor() {
     }));
     setIsDirty(true);
   };
+  const renderThumbnail = (project) => {
+  const imageData = project.heroImage;
+  
+  if (imageData) {
+    // Ưu tiên thumbnail trong editor
+    const displayUrl = imageData.thumbnailUrl || imageData.url;
+    return (
+      <img 
+        src={displayUrl} 
+        alt={project.title}
+        className="w-full h-full object-cover"
+        onError={(e) => {
+          console.error('Image failed to load:', displayUrl);
+          // Fallback về ảnh gốc nếu thumbnail lỗi
+          if (imageData.url && displayUrl === imageData.thumbnailUrl) {
+            e.target.src = imageData.url;
+          } else {
+            e.target.src = 'https://via.placeholder.com/40x40?text=Error';
+          }
+        }}
+        onLoad={() => console.log('Thumbnail loaded successfully:', project.title)}
+        loading="lazy"
+      />
+    );
+  } else {
+    return (
+      <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+        <Image size={16} className="text-gray-500" />
+      </div>
+    );
+  }
+};
 
+// Trong các phần hiển thị ảnh, thêm badge thumbnail
+{galleryPreview.map((img, i) => (
+  <div key={i} className="relative group">
+    <img 
+      src={img} 
+      alt="" 
+      className="w-full h-40 object-cover rounded-lg" 
+    />
+    {/* ✅ Badge hiển thị đang xem thumbnail */}
+    {project.gallery[i]?.thumbnailUrl && (
+      <span className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+        Thumb
+      </span>
+    )}
+    <button 
+      type="button" 
+      onClick={() => removeImage('gallery', i)} 
+      className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-20"
+      disabled={isProcessing}
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+))}
   // Hàm submit - GỬI JSON THUẦN
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -51,7 +51,7 @@ export const mediaService = {
   // Update media
   updateMedia: async (id, mediaData) => {
     try {
-      
+      console.log(mediaData)
       const response = await axiosClient.put(`/v1/media/${id}`, mediaData);
       
       return response.data;

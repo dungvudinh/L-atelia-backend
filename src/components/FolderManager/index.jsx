@@ -1,7 +1,8 @@
 // components/FolderManager.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { folderService } from '../../services/folderService';
 import { b2Service } from '../../services/b2Service';
+
 const FolderManager = ({ 
   onClose, 
   onSelect, 
@@ -19,9 +20,37 @@ const FolderManager = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
+  const [useThumbnails, setUseThumbnails] = useState(true); // ✅ Thêm state cho thumbnail
 
-  const getImageUrl = (imagePath) => {
+  // ✅ Hàm lấy URL ảnh (ưu tiên thumbnail)
+  const getImageUrl = (image, preferThumbnail = true) => {
+    if (!image) return null;
+    
+    let imagePath = image.url;
+    
+    // Ưu tiên thumbnail nếu có và user muốn dùng
+    if (preferThumbnail && useThumbnails && image.thumbnailUrl) {
+      imagePath = image.thumbnailUrl;
+    }
+    
     if (!imagePath) return null;
+    
+    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+      return imagePath;
+    }
+    
+    const baseUrl = 'http://localhost:3000';
+    const normalizedPath = imagePath.replace(/\\/g, '/');
+    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    
+    return finalUrl;
+  };
+
+  // ✅ Hàm lấy URL original (cho preview chất lượng cao)
+  const getOriginalUrl = (image) => {
+    if (!image || !image.url) return null;
+    
+    const imagePath = image.url;
     
     if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
       return imagePath;
@@ -68,6 +97,12 @@ const FolderManager = ({
       const folderData = response.data;
       setCurrentFolder(folderData);
       setImages(folderData.images || []);
+      
+      // ✅ Log thông tin thumbnail
+      const thumbnailsCount = folderData.images?.filter(img => img.thumbnailUrl).length || 0;
+      const totalImages = folderData.images?.length || 0;
+      console.log(`📊 Loaded ${totalImages} images, ${thumbnailsCount} have thumbnails`);
+      
     } catch (error) {
       console.error('Error loading folder images:', error);
       setError('Không thể tải ảnh từ folder');
@@ -127,89 +162,69 @@ const FolderManager = ({
   };
 
   const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length === 0 || !currentFolder) return;
-  
-    setUploading(true);
-    setError(null);
-  
-    try {
-      console.log(`📤 Uploading ${files.length} files to folder: ${currentFolder.name}`);
-      
-      const uploadResult = await b2Service.uploadMultipleFiles(
-        files,
-        `folders/${currentFolder._id}`,
-        (percent) => {
-          console.log(`📊 Overall progress: ${percent}%`);
-          // Update progress bar if needed
-        }
-      );
-      
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.message);
+  const files = Array.from(event.target.files);
+  if (files.length === 0 || !currentFolder) return;
+
+  setUploading(true);
+  setError(null);
+
+  try {
+    // Chỉ lấy file đầu tiên (vì input chỉ cho phép 1 file)
+    const file = files[0];
+    console.log(`📤 Uploading 1 file to folder: ${currentFolder.name}`);
+
+    const uploadResult = await b2Service.uploadFile(
+      file,
+      `folders/${currentFolder._id}`,
+      (percent) => {
+        console.log(`📊 Upload progress: ${percent}%`);
       }
-      
-      console.log('✅ Upload results:', {
-        total: uploadResult.data.total,
-        successful: uploadResult.data.successful,
-        failed: uploadResult.data.failed
-      });
-      
-      // Save successful uploads to database
-      const savedImages = [];
-      
-      for (const fileData of uploadResult.data.files) {
-        try {
-          const imageData = {
-            url: fileData.url,
-            key: fileData.key,
-            filename: fileData.filename,
-            size: fileData.size
-          };
-          
-          const saveResponse = await folderService.uploadImageToFolder(
-            currentFolder._id,
-            imageData
-          );
-          
-          savedImages.push(saveResponse.data);
-          
-        } catch (saveError) {
-          console.error('❌ Failed to save image to database:', saveError);
-          // Continue with other images
-        }
-      }
-      
-      // Update UI
-      if (savedImages.length > 0) {
-        setImages(prev => [...prev, ...savedImages]);
-        setFolders(prev => prev.map(folder => 
-          folder._id === currentFolder._id 
-            ? { 
-                ...folder, 
-                images: [...(folder.images || []), ...savedImages]
-              }
-            : folder
-        ));
-        
-        console.log(`🎉 Successfully saved ${savedImages.length} images to database`);
-      }
-      
-      // Show errors if any
-      if (uploadResult.data.errors && uploadResult.data.errors.length > 0) {
-        const errorMessages = uploadResult.data.errors.map(e => `${e.filename}: ${e.error}`).join(', ');
-        console.warn('⚠️ Some files failed:', errorMessages);
-        // Optionally show warning to user
-      }
-      
-    } catch (error) {
-      console.error('❌ Upload process failed:', error);
-      setError(`Upload failed: ${error.message}`);
-    } finally {
-      setUploading(false);
-      event.target.value = ''; // Reset input
+    );
+
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.message);
     }
-  };
+
+    console.log('✅ Upload result:', uploadResult.data);
+
+    // Save to database
+    const imageData = {
+      url: uploadResult.data.url,
+      thumbnailUrl: uploadResult.data.thumbnailUrl,
+      key: uploadResult.data.key,
+      thumbnailKey: uploadResult.data.thumbnailKey,
+      filename: uploadResult.data.filename,
+      size: uploadResult.data.size,
+      thumbnailSize: uploadResult.data.thumbnailSize || 0,
+      hasThumbnail: uploadResult.data.hasThumbnail || false
+    };
+
+    const saveResponse = await folderService.uploadImageToFolder(
+      currentFolder._id,
+      imageData
+    );
+
+    // Update UI
+    setImages(prev => [...prev, saveResponse.data]);
+    setFolders(prev => prev.map(folder => 
+      folder._id === currentFolder._id 
+        ? { 
+            ...folder, 
+            images: [...(folder.images || []), saveResponse.data]
+          }
+        : folder
+    ));
+
+    console.log('✅ Image saved to database');
+
+  } catch (error) {
+    console.error('❌ Upload process failed:', error);
+    setError(`Upload failed: ${error.message}`);
+  } finally {
+    setUploading(false);
+    event.target.value = '';
+  }
+};
 
   const handleDeleteImage = async (imageId, event) => {
     event?.stopPropagation();
@@ -218,18 +233,24 @@ const FolderManager = ({
     }
   
     try {
-      // Get image info to get the B2 key
+      // Get image info to get the B2 keys
       const imageToDelete = images.find(img => img._id === imageId);
       
-      if (imageToDelete && imageToDelete.key) {
-        // Delete from B2 via proxy
-        const deleteResult = await b2Service.deleteFile(imageToDelete.key);
+      if (imageToDelete) {
+        // Delete from B2 (both original and thumbnail)
+        const deleteResult = await b2Service.deleteFile({
+          fileKey: imageToDelete.key,
+          thumbnailKey: imageToDelete.thumbnailKey
+        });
         
         if (!deleteResult.success) {
           throw new Error(deleteResult.message);
         }
         
-        console.log('🗑️ Deleted image from B2:', imageToDelete.key);
+        console.log('🗑️ Deleted image and thumbnail from B2:', {
+          original: imageToDelete.key,
+          thumbnail: imageToDelete.thumbnailKey
+        });
       }
       
       // Delete from database
@@ -289,78 +310,174 @@ const FolderManager = ({
     await loadFolderImages(folder._id);
   };
 
-  const ImageItem = ({ image }) => {
-    const [imgError, setImgError] = useState(false);
-    const [imgLoading, setImgLoading] = useState(true);
-    const isSelected = selectedImages.some(img => img._id === image._id);
+  // ✅ Component ImageItem với lazy loading và thumbnail
+const ImageItem = ({ image }) => {
+  const [imgError, setImgError] = useState(false);
+  const [imgLoading, setImgLoading] = useState(true);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const imgRef = useRef(null);
+  const isSelected = selectedImages.some(img => img._id === image._id);
 
-    const handleImageError = () => {
-      setImgError(true);
+  // ✅ Xác định URL để hiển thị
+  const displayUrl = showOriginal || !image.thumbnailUrl 
+    ? getOriginalUrl(image) 
+    : getImageUrl(image, true);
+
+  // ✅ Effect để check nếu ảnh đã cache
+  useEffect(() => {
+    // Tạo một image object để kiểm tra trạng thái
+    const img = new Image();
+    img.src = displayUrl;
+    
+    if (img.complete) {
+      // Ảnh đã được cache hoặc load xong
       setImgLoading(false);
-    };
+      setImageLoaded(true);
+    } else {
+      // Đặt timeout để tránh loading vô hạn
+      const timeoutId = setTimeout(() => {
+        if (imgLoading) {
+          setImgLoading(false);
+        }
+      }, 3000); // 3 giây timeout
+      
+      img.onload = () => {
+        setImgLoading(false);
+        setImageLoaded(true);
+        clearTimeout(timeoutId);
+      };
+      
+      img.onerror = () => {
+        setImgError(true);
+        setImgLoading(false);
+        clearTimeout(timeoutId);
+      };
+      
+      return () => {
+        clearTimeout(timeoutId);
+        img.onload = null;
+        img.onerror = null;
+      };
+    }
+  }, [displayUrl]);
 
-    const handleImageLoad = () => {
-      setImgLoading(false);
-    };
+  const handleImageError = () => {
+    setImgError(true);
+    setImgLoading(false);
+  };
 
-    return (
-      <div
-        onClick={() => handleImageSelect(image)}
-        className={`group relative bg-white border ${isSelected ? 'border-blue-500 border-2' : 'border-gray-200'} rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all`}
-      >
-        <div className="aspect-square bg-gray-100 relative">
-          {imgLoading && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-            </div>
-          )}
-          <img
-            src={imgError ? '/images/placeholder.jpg' : getImageUrl(image.url)}
-            alt={image.originalName}
-            className="w-full h-full object-cover"
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-            style={{ display: imgLoading ? 'none' : 'block' }}
-          />
-          {isSelected && (
-            <div className="absolute top-2 left-2 bg-blue-500 text-white p-1 rounded-full">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <button className="bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
+  const handleImageLoad = () => {
+    setImgLoading(false);
+    setImageLoaded(true);
+  };
+
+  // ✅ Xác định kích thước hiển thị
+  const displayDimensions = showOriginal || !image.thumbnailUrl
+    ? (image.dimensions ? `${image.dimensions.width}x${image.dimensions.height}` : 'Original')
+    : (image.thumbnailDimensions ? `${image.thumbnailDimensions.width}x${image.thumbnailDimensions.height}` : 'Thumbnail');
+
+  return (
+    <div
+      onClick={() => handleImageSelect(image)}
+      className={`group relative bg-white border ${isSelected ? 'border-blue-500 border-2' : 'border-gray-200'} rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all`}
+    >
+      <div className="aspect-square bg-gray-100 relative">
+        {/* ✅ Chỉ hiển thị spinner khi đang thực sự loading */}
+        {imgLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
           </div>
+        ) : null}
+        
+        {/* ✅ Không dùng style={{ display: imgLoading ? 'none' : 'block' }} nữa */}
+        <img
+          ref={imgRef}
+          src={imgError ? '/images/placeholder.jpg' : displayUrl}
+          alt={image.filename}
+          className={`w-full h-full object-cover ${imgLoading ? 'opacity-0' : 'opacity-100 transition-opacity duration-300'}`}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          loading="lazy"
+        />
+        
+        {isSelected && (
+          <div className="absolute top-2 left-2 bg-blue-500 text-white p-1 rounded-full">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
+        
+        {/* ✅ Badge hiển thị loại ảnh (thumbnail/original) */}
+        <div className="absolute top-2 right-2">
+          {image.thumbnailUrl && !imgLoading && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowOriginal(!showOriginal);
+                // Reset loading khi toggle
+                setImgLoading(true);
+              }}
+              className="bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full hover:bg-opacity-70 transition-opacity"
+              title={showOriginal ? "Hiển thị thumbnail" : "Hiển thị ảnh gốc"}
+            >
+              {showOriginal ? '👁️ Gốc' : '📸 Thumb'}
+            </button>
+          )}
         </div>
         
-        {allowUpload && (
-          <button
-            onClick={(e) => handleDeleteImage(image._id, e)}
-            className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <button className="bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
-        )}
-
-        <div className="p-2">
-          <p className="text-xs font-medium text-gray-900 truncate mb-1">
-            {image.filename}
-          </p>
-          <p className="text-xs text-gray-500">
-            {image.size ? `${(image.size / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}
-          </p>
         </div>
       </div>
-    );
-  };
+      
+      {allowUpload && !imgLoading && (
+        <button
+          onClick={(e) => handleDeleteImage(image._id, e)}
+          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+
+      <div className="p-2">
+        <p className="text-xs font-medium text-gray-900 truncate mb-1">
+          {image.filename}
+        </p>
+        <div className="flex justify-between items-center">
+          <p className="text-xs text-gray-500">
+            {image.size ? `${(image.size / 1024).toFixed(0)} KB` : 'Unknown size'}
+          </p>
+          <span className="text-xs text-gray-400" title={`Kích thước: ${displayDimensions}`}>
+            {displayDimensions}
+          </span>
+        </div>
+        
+        {/* ✅ Hiển thị thông tin thumbnail */}
+        {image.hasThumbnail && (
+          <div className="mt-1 flex items-center gap-1">
+            <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+              ✓ Thumbnail
+            </span>
+            {image.thumbnailSize > 0 && (
+              <span className="text-xs text-gray-400">
+                ({(image.thumbnailSize / 1024).toFixed(0)}KB)
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
   if (loading) {
     return (
@@ -383,14 +500,31 @@ const FolderManager = ({
               {currentFolder ? `Đang xem: ${currentFolder.name}` : description}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          
+          <div className="flex items-center gap-4">
+            {/* ✅ Toggle sử dụng thumbnail */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Thumbnail:</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useThumbnails}
+                  onChange={() => setUseThumbnails(!useThumbnails)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -402,6 +536,27 @@ const FolderManager = ({
             >
               Đóng
             </button>
+          </div>
+        )}
+
+        {/* ✅ Thông báo về thumbnail */}
+        {useThumbnails && (
+          <div className="mx-6 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-blue-700">
+                Đang sử dụng thumbnail để tăng tốc độ tải. Click vào badge "Thumb" để xem ảnh gốc.
+              </p>
+            </div>
+            <div className="mt-2 text-xs text-blue-600">
+              {(() => {
+                const totalImages = images.length;
+                const thumbnailsCount = images.filter(img => img.thumbnailUrl).length;
+                return `${thumbnailsCount}/${totalImages} ảnh có thumbnail (${totalImages > 0 ? Math.round((thumbnailsCount / totalImages) * 100) : 0}%)`;
+              })()}
+            </div>
           </div>
         )}
 
@@ -510,11 +665,12 @@ const FolderManager = ({
                         <p className="mb-2 text-sm text-gray-500">
                           <span className="font-semibold">Nhấp để tải lên</span> hoặc kéo thả
                         </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF (Tối đa 10MB)</p>
+                        <p className="text-xs text-gray-500">PNG, JPG, GIF, WEBP (Tối đa 10MB)</p>
+                        <p className="text-xs text-green-600 mt-1">✓ Tự động tạo thumbnail</p>
                       </div>
                       <input
                         type="file"
-                        multiple
+                        // multiple
                         accept="image/*"
                         onChange={handleFileUpload}
                         className="hidden"
@@ -527,7 +683,7 @@ const FolderManager = ({
                 {uploading && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span className="ml-3 text-gray-600">Đang tải lên...</span>
+                    <span className="ml-3 text-gray-600">Đang tải lên và tạo thumbnail...</span>
                   </div>
                 )}
 
@@ -544,6 +700,7 @@ const FolderManager = ({
                     </svg>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Không có ảnh nào</h3>
                     <p className="text-gray-600">Tải lên ảnh đầu tiên của bạn</p>
+                    <p className="text-sm text-green-600 mt-1">Thumbnail sẽ được tạo tự động</p>
                   </div>
                 )}
               </>
@@ -571,6 +728,15 @@ const FolderManager = ({
               {!singleSelect && selectedImages.length > 0 && (
                 <p className="text-sm text-blue-600 mt-1">
                   Đã chọn {selectedImages.length} ảnh
+                </p>
+              )}
+              {/* ✅ Thông tin thumbnail */}
+              {currentFolder && images.length > 0 && (
+                <p className="text-sm text-green-600 mt-1">
+                  {(() => {
+                    const thumbnailsCount = images.filter(img => img.thumbnailUrl).length;
+                    return `${thumbnailsCount}/${images.length} ảnh có thumbnail`;
+                  })()}
                 </p>
               )}
             </div>

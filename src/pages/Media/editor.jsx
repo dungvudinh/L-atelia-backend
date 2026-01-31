@@ -4,13 +4,15 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Editor } from '@tinymce/tinymce-react';
 import { folderService } from '../../services/folderService';
 import { mediaService } from '../../services/mediaService';
-import { b2Service } from '../../services/b2Service'; // New service for B2 pre-signed URLs
+import { b2Service } from '../../services/b2Service';
+import FolderManager from '../../components/FolderManager';
 
 const MediaEditor = () => {
   const { mediaId } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(mediaId);
   const editorRef = useRef(null);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -24,12 +26,14 @@ const MediaEditor = () => {
   
   const [loading, setLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
-  const [showMediaManager, setShowMediaManager] = useState(false);
+  const [showFolderManager, setShowFolderManager] = useState(false);
+  const [folderManagerMode, setFolderManagerMode] = useState('editor');
   const [pendingImageDeletion, setPendingImageDeletion] = useState(false);
   const [originalFeaturedImage, setOriginalFeaturedImage] = useState(null);
   const [pendingImageUpload, setPendingImageUpload] = useState(null);
   const [localImageUrl, setLocalImageUrl] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedImageFromFolder, setSelectedImageFromFolder] = useState(null);
 
   useEffect(() => {
     if (isEditing) {
@@ -63,6 +67,7 @@ const MediaEditor = () => {
       setPendingImageUpload(null);
       setLocalImageUrl(null);
       setErrorMessage('');
+      setSelectedImageFromFolder(null);
     } catch (error) {
       console.error('Error loading media:', error);
       alert('Không thể tải media');
@@ -86,26 +91,107 @@ const MediaEditor = () => {
     }));
   };
 
-  // Xử lý upload ảnh với pre-signed URL
+  const handleSelectImagesForEditor = (selectedImages) => {
+    if (!selectedImages || selectedImages.length === 0) return;
+    console.log('📝 Selected images for editor:', selectedImages);
+    if (editorRef.current && isEditorReady) {
+      const editor = editorRef.current;
+      
+      selectedImages.forEach(image => {
+        const imageUrl = image.url;
+        console.log('📝 Inserting image into editor:', imageUrl);
+        editor.execCommand('mceInsertContent', false, `
+          <img 
+            src="${imageUrl}" 
+            alt="${image.filename}" 
+            style="max-width: 100%; height: auto;"
+          />
+        `);
+      });
+      
+      console.log(`✅ Đã chèn ${selectedImages.length} ảnh gốc vào editor`);
+    } else {
+      console.error('❌ Editor chưa sẵn sàng');
+    }
+    
+    setShowFolderManager(false);
+  };
+
+  const handleSelectFeaturedImage = (selectedImages) => {
+    if (!selectedImages || selectedImages.length === 0) return;
+    
+    try {
+      const imageData = Array.isArray(selectedImages) ? selectedImages[0] : selectedImages;
+      
+      const newImage = {
+        url: imageData.url,
+        thumbnailUrl: imageData.thumbnailUrl || null,
+        key: imageData.key,
+        thumbnailKey: imageData.thumbnailKey || null,
+        filename: imageData.filename,
+        originalName: imageData.originalName || imageData.filename,
+        size: imageData.size || 0,
+        thumbnailSize: imageData.thumbnailSize || 0,
+        hasThumbnail: imageData.hasThumbnail || false,
+        isLocal: false,
+        isNewFromFolder: true
+      };
+      
+      setFormData(prev => ({
+        ...prev,
+        featuredImage: newImage
+      }));
+      
+      setSelectedImageFromFolder(newImage);
+      
+      const displayUrl = newImage.thumbnailUrl || newImage.url;
+      setLocalImageUrl(displayUrl);
+      
+      if (pendingImageUpload) {
+        setPendingImageUpload(null);
+      }
+      
+      if (pendingImageDeletion) {
+        setPendingImageDeletion(false);
+      }
+      
+      setErrorMessage('');
+      
+      console.log('📝 Selected featured image from FolderManager:', newImage);
+      
+    } catch (error) {
+      console.error('❌ Error selecting featured image from FolderManager:', error);
+      alert('Không thể chọn ảnh từ thư viện');
+    } finally {
+      setShowFolderManager(false);
+    }
+  };
+
+  const openFolderManagerForEditor = () => {
+    setFolderManagerMode('editor');
+    setShowFolderManager(true);
+  };
+
+  const openFolderManagerForFeaturedImage = () => {
+    setFolderManagerMode('featured');
+    setShowFolderManager(true);
+  };
+
   const handleImageUpload = async (file) => {
     if (!file) return;
     
     try {
       setImageUploading(true);
       
-      // 1. Tạo URL local để hiển thị preview
       const localUrl = URL.createObjectURL(file);
       setLocalImageUrl(localUrl);
       
-      // 2. Lưu file để upload sau
       setPendingImageUpload(file);
       
-      // 3. Tạo tên file unique
       const timestamp = Date.now();
       const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '-').toLowerCase();
       const uniqueFilename = `${timestamp}-${safeName}`;
       
-      // 4. Cập nhật form data với thông tin tạm thời
       setFormData(prev => ({
         ...prev,
         featuredImage: {
@@ -115,11 +201,13 @@ const MediaEditor = () => {
           size: file.size,
           type: file.type,
           isLocal: true,
-          uploadPending: true
+          uploadPending: true,
+          isNewUpload: true
         }
       }));
       
-      // 5. Clear error message khi có ảnh mới
+      setSelectedImageFromFolder(null);
+      
       setErrorMessage('');
       
       console.log('📝 Prepared image for upload:', {
@@ -136,36 +224,30 @@ const MediaEditor = () => {
     }
   };
 
-  // Upload ảnh lên B2 sử dụng pre-signed URL
   const uploadImageToB2 = async (file) => {
   try {
     console.log('🚀 Uploading featured image via proxy...');
     
-    // Show upload progress
+    // 🔴 THÊM: Upload ảnh vào path /latelia/media/
     const uploadResult = await b2Service.uploadFile(
       file, 
-      'featured-images',
+      'media', // 🔴 Sửa: 'media' thay vì 'featured-images'
       (percent) => {
         console.log(`📊 Upload progress: ${percent}%`);
-        // You can update UI with progress here
       }
     );
-    
+    console.log('uploadResult:', uploadResult)
     if (!uploadResult.success) {
       throw new Error(uploadResult.message);
     }
     
-    console.log('✅ Featured image uploaded:', uploadResult.data);
+    console.log('✅ Featured image uploaded to /latelia/media/:', uploadResult.data);
     
     return {
-      url: uploadResult.data.url,
-      key: uploadResult.data.key,
-      filename: uploadResult.data.filename,
-      originalName: uploadResult.data.originalName,
-      size: uploadResult.data.size,
-      type: uploadResult.data.type,
-      uploadedAt: uploadResult.data.uploadedAt,
-      optimized: uploadResult.data.optimized || false
+     ...uploadResult.data, 
+      optimized: uploadResult.data.optimized || false,
+      isFromMediaUpload: true, // 🔴 Đánh dấu đây là ảnh từ upload MediaEditor
+      storagePath: 'media' // 🔴 Đánh dấu path
     };
     
   } catch (error) {
@@ -174,55 +256,82 @@ const MediaEditor = () => {
   }
 };
 
-  // Xóa ảnh từ B2
-  const deleteImageFromB2 = async (imageKey) => {
-    try {
-      if (!imageKey) return;
+  const deleteImageFromB2 = async (imageKey, imageData = null) => {
+  try {
+    if (!imageKey) return;
+    
+    // 🔴 QUAN TRỌNG: Chỉ xóa nếu ảnh từ /latelia/media/
+    if (imageData) {
+      // Kiểm tra xem ảnh có từ path /latelia/media/ không
+      const isFromMediaPath = imageData.isFromMediaUpload || 
+                              (imageData.key && imageData.key.includes('/media/')) ||
+                              (imageData.url && imageData.url.includes('/latelia/media/'));
       
-      console.log('🗑️ Deleting image from B2:', imageKey);
-      await b2Service.deleteFile(imageKey);
-      console.log('✅ Image deleted from B2');
+      console.log('🔍 Checking if should delete from B2:', {
+        imageKey,
+        isFromMediaUpload: imageData.isFromMediaUpload,
+        keyIncludesMedia: imageData.key?.includes('/media/'),
+        urlIncludesMedia: imageData.url?.includes('/latelia/media/'),
+        shouldDelete: isFromMediaPath
+      });
       
-    } catch (error) {
-      console.error('❌ Failed to delete image from B2:', error);
-      // Không throw error để không ảnh hưởng đến flow chính
-      // Ảnh sẽ bị xóa sau hoặc qua cleanup job
+      // 🔴 CHỈ xóa nếu ảnh từ path /latelia/media/
+      if (!isFromMediaPath) {
+        console.log('⚠️ Skipping deletion - Image is from FolderManager (folders/)');
+        return;
+      }
     }
-  };
+    
+    console.log('🗑️ Deleting image from B2 /latelia/media/:', imageKey);
+    await b2Service.deleteFile(imageKey);
+    console.log('✅ Image deleted from B2');
+    
+  } catch (error) {
+    console.error('❌ Failed to delete image from B2:', error);
+  }
+};
 
-  // Xóa ảnh - chỉ xóa ở UI
   const handleDeleteFeaturedImage = () => {
-    if (!formData.featuredImage) return;
+  if (!formData.featuredImage) return;
+  
+  if (localImageUrl) {
+    URL.revokeObjectURL(localImageUrl);
+    setLocalImageUrl(null);
+  }
+  
+  if (originalFeaturedImage) {
+    // 🔴 Kiểm tra nguồn gốc ảnh để hiển thị thông báo phù hợp
+    const isFromMediaUpload = originalFeaturedImage.isFromMediaUpload || 
+                             (originalFeaturedImage.key && originalFeaturedImage.key.includes('/media/')) ||
+                             (originalFeaturedImage.url && originalFeaturedImage.url.includes('/latelia/media/'));
     
-    // Nếu có URL local, giải phóng bộ nhớ
-    if (localImageUrl) {
-      URL.revokeObjectURL(localImageUrl);
-      setLocalImageUrl(null);
+    if (isFromMediaUpload) {
+      console.log('🗑️ Will delete image from /latelia/media/');
+    } else {
+      console.log('⚠️ Image is from folders/ - Will NOT delete from B2');
     }
     
-    // Nếu có ảnh gốc, đánh dấu để xóa khi submit
-    if (originalFeaturedImage) {
-      setPendingImageDeletion(true);
-    }
-    
-    // Reset pending upload nếu có
-    if (pendingImageUpload) {
-      setPendingImageUpload(null);
-    }
-    
-    // Xóa khỏi UI
-    setFormData(prev => ({
-      ...prev,
-      featuredImage: ''
-    }));
-    
-    // Set error message vì không còn ảnh
-    if (!isEditing) {
-      setErrorMessage('Vui lòng thêm ảnh đại diện trước khi xuất bản');
-    }
-  };
+    setPendingImageDeletion(true);
+  }
+  
+  if (pendingImageUpload) {
+    setPendingImageUpload(null);
+  }
+  
+  if (selectedImageFromFolder) {
+    setSelectedImageFromFolder(null);
+  }
+  
+  setFormData(prev => ({
+    ...prev,
+    featuredImage: ''
+  }));
+  
+  if (!isEditing) {
+    setErrorMessage('Vui lòng thêm ảnh đại diện trước khi xuất bản');
+  }
+};
 
-  // Khôi phục ảnh đã xóa
   const handleRestoreFeaturedImage = () => {
     if (originalFeaturedImage) {
       setFormData(prev => ({
@@ -234,30 +343,26 @@ const MediaEditor = () => {
     }
   };
 
-  // Kiểm tra xem có ảnh đại diện không
   const hasFeaturedImage = () => {
-    // Có ảnh mới chưa upload
     if (pendingImageUpload) return true;
     
-    // Có ảnh trong form data (có thể là ảnh cũ hoặc ảnh mới đã được xử lý)
+    if (selectedImageFromFolder) return true;
+    
     if (formData.featuredImage) {
-      // Nếu là object có isLocal = false hoặc không có isLocal (ảnh từ server)
       if (typeof formData.featuredImage === 'object') {
+        if (formData.featuredImage.isNewFromFolder) return true;
+        if (formData.featuredImage.isNewUpload) return true;
         return !formData.featuredImage.isLocal;
       }
-      // Nếu là string (URL ảnh)
       return true;
     }
     
-    // Có ảnh cũ và không có đánh dấu xóa
     if (originalFeaturedImage && !pendingImageDeletion) return true;
     
     return false;
   };
 
-  // Validate trước khi submit
   const validateBeforeSubmit = () => {
-    // Kiểm tra trường bắt buộc
     if (!formData.title.trim()) {
       setErrorMessage('Vui lòng nhập tiêu đề');
       return false;
@@ -268,7 +373,6 @@ const MediaEditor = () => {
       return false;
     }
     
-    // Kiểm tra ảnh đại diện
     if (!hasFeaturedImage()) {
       setErrorMessage('Vui lòng thêm ảnh đại diện trước khi ' + (isEditing ? 'cập nhật' : 'xuất bản'));
       return false;
@@ -278,162 +382,198 @@ const MediaEditor = () => {
     return true;
   };
 
-  // Xử lý khi submit form
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validate trước khi submit
-    if (!validateBeforeSubmit()) {
-      return;
-    }
-    
-    setLoading(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!validateBeforeSubmit()) {
+    return;
+  }
+  
+  setLoading(true);
 
-    try {
-      const submitData = {
-        title: formData.title,
-        content: formData.content,
-        excerpt: formData.excerpt,
-        category: formData.category,
-        status: formData.status,
-        tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+  try {
+    const submitData = {
+      title: formData.title,
+      content: formData.content,
+      excerpt: formData.excerpt,
+      category: formData.category,
+      status: formData.status,
+      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    };
+
+    console.log('📤 Submitting media data with image check:', {
+      pendingImageUpload: !!pendingImageUpload,
+      selectedImageFromFolder: !!selectedImageFromFolder,
+      pendingImageDeletion: pendingImageDeletion,
+      originalFeaturedImage: !!originalFeaturedImage,
+    });
+
+    // 🟢 LOGIC ĐƠN GIẢN HÓA:
+    
+    // Xác định ảnh cần lưu
+    let featuredImageToSave = null;
+    
+    // 1. Ưu tiên ảnh mới từ upload (sẽ lưu vào /latelia/media/)
+    if (pendingImageUpload) {
+      console.log('🚀 Uploading new image to B2 /latelia/media/...');
+      const uploadedImage = await uploadImageToB2(pendingImageUpload);
+      console.log('uploadedImage', uploadedImage);
+      featuredImageToSave = {
+        ...uploadedImage, 
+        isFromMediaUpload: true, // 🔴 Đánh dấu đây là ảnh từ MediaEditor
+        storagePath: 'media' // 🔴 Đánh dấu path
       };
-
-      // 1. Xử lý upload ảnh mới nếu có
-      if (pendingImageUpload) {
-        try {
-          console.log('🚀 Uploading new image to B2...');
-          
-          // Upload ảnh lên B2 sử dụng pre-signed URL
-          const uploadedImage = await uploadImageToB2(pendingImageUpload);
-          
-          submitData.featuredImage = {
-            url: uploadedImage.url,
-            key: uploadedImage.key,
-            filename: uploadedImage.filename,
-            originalName: uploadedImage.originalName,
-            size: uploadedImage.size,
-            type: uploadedImage.type,
-            uploaded_at: uploadedImage.uploadedAt
-          };
-          
-          console.log('✅ New image uploaded to B2:', submitData.featuredImage);
-          
-          // 2. Xóa ảnh cũ nếu có và đã upload ảnh mới
-          if (originalFeaturedImage && originalFeaturedImage.key) {
-            try {
-              await deleteImageFromB2(originalFeaturedImage.key);
-              console.log('✅ Deleted old image from B2');
-            } catch (deleteError) {
-              console.warn('⚠️ Could not delete old image from B2:', deleteError.message);
-              // Vẫn tiếp tục vì đã có ảnh mới
-            }
-          }
-          
-          // Clear pending upload
-          setPendingImageUpload(null);
-          
-        } catch (uploadError) {
-          console.error('❌ Image upload failed:', uploadError);
-          alert('Không thể upload ảnh lên cloud storage');
-          setLoading(false);
-          return;
-        }
-      }
-      // 3. Xử lý xóa ảnh nếu không có ảnh mới nhưng có đánh dấu xóa
-      else if (pendingImageDeletion && originalFeaturedImage) {
-        // Đánh dấu là xóa ảnh (gửi chuỗi rỗng)
-        submitData.featuredImage = '';
-        
-        try {
-          await deleteImageFromB2(originalFeaturedImage.key);
-          console.log('✅ Deleted image from B2');
-        } catch (deleteError) {
-          console.warn('⚠️ Could not delete image from B2:', deleteError.message);
-          // Vẫn tiếp tục cập nhật bài viết
-        }
-        
-        setPendingImageDeletion(false);
-      }
-      // 4. Giữ nguyên ảnh cũ nếu không có thay đổi
-      else if (originalFeaturedImage && !pendingImageDeletion && !pendingImageUpload) {
-        submitData.featuredImage = originalFeaturedImage;
-      }
-      // 5. Trường hợp tạo mới có ảnh mới (đã được xử lý ở trên)
-      // 6. Không có ảnh nào (không xảy ra vì đã validate)
-      else {
-        // Nếu là tạo mới và không có pendingImageUpload, có thể có ảnh từ formData
-        if (formData.featuredImage && typeof formData.featuredImage === 'object' && !formData.featuredImage.isLocal) {
-          submitData.featuredImage = formData.featuredImage;
-        } else {
-          submitData.featuredImage = '';
-        }
-      }
-
-      console.log('📤 Submitting media data:', submitData);
-
-      // Gọi API lưu media
-      if (isEditing) {
-        await mediaService.updateMedia(mediaId, submitData);
-      } else {
-        await mediaService.createMedia(submitData);
-      }
-
-      // Giải phóng URL local nếu có
-      if (localImageUrl) {
-        URL.revokeObjectURL(localImageUrl);
-      }
-
-      // Reset các state
-      setPendingImageDeletion(false);
       setPendingImageUpload(null);
-      setLocalImageUrl(null);
-      setErrorMessage('');
-      
-      navigate('/media');
-    } catch (error) {
-      console.error('❌ Error saving media:', error);
-      console.error('Error response:', error.response?.data);
-      alert('Không thể lưu media: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
     }
-  };
+    // 2. Ưu tiên ảnh mới từ FolderManager (path: /latelia/folders/.../)
+    else if (selectedImageFromFolder) {
+      console.log('🖼️ Using image selected from FolderManager (folders/)');
+      featuredImageToSave = {
+        url: selectedImageFromFolder.url,
+        thumbnailUrl: selectedImageFromFolder.thumbnailUrl,
+        key: selectedImageFromFolder.key,
+        thumbnailKey: selectedImageFromFolder.thumbnailKey,
+        filename: selectedImageFromFolder.filename,
+        originalName: selectedImageFromFolder.originalName,
+        size: selectedImageFromFolder.size,
+        thumbnailSize: selectedImageFromFolder.thumbnailSize,
+        hasThumbnail: selectedImageFromFolder.hasThumbnail || false,
+        isFromMediaUpload: false, // 🔴 Đánh dấu KHÔNG phải từ MediaEditor
+        storagePath: 'folders' // 🔴 Đánh dấu path
+      };
+    }
+    // 3. Nếu xóa ảnh
+    else if (pendingImageDeletion) {
+      featuredImageToSave = ''; // Empty string để xóa
+    }
+    // 4. Nếu đang edit và không xóa, giữ ảnh cũ
+    else if (isEditing && originalFeaturedImage && !pendingImageDeletion) {
+      featuredImageToSave = originalFeaturedImage;
+    }
+    // 5. Nếu tạo mới và có ảnh trong formData
+    else if (!isEditing && formData.featuredImage && typeof formData.featuredImage === 'object') {
+      if (formData.featuredImage.key) {
+        featuredImageToSave = {
+          url: formData.featuredImage.url,
+          thumbnailUrl: formData.featuredImage.thumbnailUrl,
+          key: formData.featuredImage.key,
+          thumbnailKey: formData.featuredImage.thumbnailKey,
+          filename: formData.featuredImage.filename,
+          originalName: formData.featuredImage.originalName,
+          size: formData.featuredImage.size,
+          thumbnailSize: formData.featuredImage.thumbnailSize,
+          hasThumbnail: formData.featuredImage.hasThumbnail || false,
+          // 🔴 Kiểm tra nguồn gốc
+          isFromMediaUpload: formData.featuredImage.isFromMediaUpload || 
+                           (formData.featuredImage.key?.includes('/media/') || 
+                            formData.featuredImage.url?.includes('/latelia/media/')),
+          storagePath: formData.featuredImage.key?.includes('/media/') ? 'media' : 'folders'
+        };
+      }
+    }
 
-  // Hủy bỏ thay đổi
+    // 🔴 Xóa ảnh cũ nếu cần - CHỈ xóa nếu ảnh từ /latelia/media/
+    if (isEditing && originalFeaturedImage && originalFeaturedImage.key) {
+      // Kiểm tra xem ảnh cũ có phải từ MediaEditor không
+      const isOldImageFromMediaUpload = originalFeaturedImage.isFromMediaUpload || 
+                                       (originalFeaturedImage.key && originalFeaturedImage.key.includes('/media/')) ||
+                                       (originalFeaturedImage.url && originalFeaturedImage.url.includes('/latelia/media/'));
+      
+      console.log('🔍 Old image source check:', {
+        key: originalFeaturedImage.key,
+        url: originalFeaturedImage.url,
+        isFromMediaUpload: originalFeaturedImage.isFromMediaUpload,
+        isOldImageFromMediaUpload: isOldImageFromMediaUpload
+      });
+      
+      // Chỉ xóa ảnh cũ nếu:
+      // 1. Có ảnh mới thay thế VÀ ảnh cũ từ MediaEditor
+      // 2. Đang xóa ảnh VÀ ảnh cũ từ MediaEditor
+      const shouldDeleteOldImage = 
+        ((featuredImageToSave && featuredImageToSave !== '' && featuredImageToSave.key !== originalFeaturedImage.key) || 
+         pendingImageDeletion) &&
+        isOldImageFromMediaUpload;
+      
+      if (shouldDeleteOldImage) {
+        try {
+          await deleteImageFromB2(originalFeaturedImage.key, originalFeaturedImage);
+          console.log('✅ Deleted old image from B2 /latelia/media/');
+        } catch (deleteError) {
+          console.warn('⚠️ Could not delete old image from B2:', deleteError.message);
+        }
+      } else if (pendingImageDeletion && !isOldImageFromMediaUpload) {
+        console.log('⚠️ Skipping deletion - Old image is from FolderManager (folders/)');
+      }
+    }
+
+    // Thêm featuredImage vào submitData
+    submitData.featuredImage = featuredImageToSave || '';
+
+    console.log('📤 Final data to submit:', submitData);
+
+    // Gửi dữ liệu lên server
+    let result;
+    if (isEditing) {
+      result = await mediaService.updateMedia(mediaId, submitData);
+      console.log('✅ Media updated successfully:', result);
+    } else {
+      result = await mediaService.createMedia(submitData);
+      console.log('✅ Media created successfully:', result);
+    }
+
+    // Cleanup
+    if (localImageUrl) {
+      URL.revokeObjectURL(localImageUrl);
+    }
+
+    setPendingImageDeletion(false);
+    setPendingImageUpload(null);
+    setSelectedImageFromFolder(null);
+    setLocalImageUrl(null);
+    setErrorMessage('');
+    
+    alert(isEditing ? 'Cập nhật bài viết thành công' : 'Tạo bài viết thành công');
+    navigate('/media');
+  } catch (error) {
+    console.error('❌ Error saving media:', error);
+    console.error('Error response:', error.response?.data);
+    alert('Không thể lưu media: ' + (error.response?.data?.message || error.message));
+  } finally {
+    setLoading(false);
+  }
+};
+
   const handleCancel = () => {
-    // Giải phóng URL local nếu có
     if (localImageUrl) {
       URL.revokeObjectURL(localImageUrl);
     }
     
-    // Reset các state
     setPendingImageDeletion(false);
     setPendingImageUpload(null);
+    setSelectedImageFromFolder(null);
     setLocalImageUrl(null);
     setErrorMessage('');
     
     navigate('/media');
   };
 
-  // Lấy URL ảnh để hiển thị
   const getImageUrl = (imageData) => {
     if (!imageData) return null;
     
-    // Nếu là string (URL từ server)
     if (typeof imageData === 'string') {
       return imageData;
     }
     
-    // Nếu là object có thuộc tính url
     if (typeof imageData === 'object' && imageData.url) {
+      if (imageData.thumbnailUrl) {
+        return imageData.thumbnailUrl;
+      }
       return imageData.url;
     }
     
     return null;
   };
 
-  // Lấy thông tin ảnh để hiển thị
   const getImageInfo = () => {
     if (!formData.featuredImage) return null;
     
@@ -442,7 +582,10 @@ const MediaEditor = () => {
         url: getImageUrl(formData.featuredImage),
         filename: formData.featuredImage.filename || 'Ảnh tải lên',
         isLocal: formData.featuredImage.isLocal || false,
-        uploadPending: formData.featuredImage.uploadPending || false
+        uploadPending: formData.featuredImage.uploadPending || false,
+        hasThumbnail: formData.featuredImage.hasThumbnail || false,
+        isNewFromFolder: formData.featuredImage.isNewFromFolder || false,
+        isNewUpload: formData.featuredImage.isNewUpload || false
       };
     }
     
@@ -474,7 +617,6 @@ const MediaEditor = () => {
           </Link>
         </div>
 
-        {/* Error Message */}
         {errorMessage && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center">
@@ -511,7 +653,10 @@ const MediaEditor = () => {
                 </label>
                 <Editor
                   apiKey="e0mlbyctuw2vqfmgsikefb1m8z608cd8xxk435olgbfd46ez"
-                  onInit={(evt, editor) => editorRef.current = editor}
+                  onInit={(evt, editor) => {
+                    editorRef.current = editor;
+                    setIsEditorReady(true);
+                  }}
                   value={formData.content}
                   onEditorChange={handleEditorChange}
                   init={{
@@ -522,12 +667,16 @@ const MediaEditor = () => {
                       'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
                       'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
                     ],
-                    font_family_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Nunito Sans=nunito sans;Cormorant Infant=cormorant infant,sans-serif',
                     toolbar: 'undo redo | blocks fontfamily | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image media | code',
+                    file_picker_types: 'image',
+                    file_picker_callback: (callback, value, meta) => {
+                      openFolderManagerForEditor();
+                    },
                     content_style: `
                       @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
                       @import url('https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300..700;1,300..700&display=swap');
                       body { font-family: Nunito Sans, sans-serif; }
+                      img { max-width: 100%; height: auto; }
                     `,
                     color_map: [
                       '#F3EEE7', 'BG Primary',
@@ -542,25 +691,24 @@ const MediaEditor = () => {
                     ],
                     color_cols: 3,
                     color_default_foreground: '#404040',
-                    color_default_background: '#F3EEE7',
-                    file_picker_types: 'image media',
-                    file_picker_callback: (callback, value, meta) => {
-                      if (meta.filetype === 'image') {
-                        setShowMediaManager(true);
-                      }
-                    }
+                    color_default_background: '#F3EEE7'
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowMediaManager(true)}
-                  className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Mở Media Manager
-                </button>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={openFolderManagerForEditor}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Chèn ảnh từ thư viện
+                  </button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Ảnh sẽ được chèn với chất lượng gốc
+                  </p>
+                </div>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -658,6 +806,16 @@ const MediaEditor = () => {
                           Sẽ xóa
                         </div>
                       )}
+                      {imageInfo.hasThumbnail && (
+                        <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                          ✓ Thumb
+                        </div>
+                      )}
+                      {imageInfo.isNewFromFolder && (
+                        <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                          Ảnh mới
+                        </div>
+                      )}
                     </div>
                     
                     <div className="space-y-2">
@@ -669,6 +827,20 @@ const MediaEditor = () => {
                       >
                         {imageUploading ? 'Đang xử lý...' : 'Xóa ảnh'}
                       </button>
+                      
+                      <button
+                        type="button"
+                        onClick={openFolderManagerForFeaturedImage}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        Chọn từ thư viện
+                      </button>
+                      
+                      {imageInfo.isNewFromFolder && (
+                        <div className="text-xs text-blue-600 font-medium bg-blue-50 p-2 rounded text-center">
+                          Đã chọn ảnh mới từ thư viện. Ảnh này sẽ được lưu khi bạn nhấn "{isEditing ? 'Cập nhật' : 'Xuất bản'}"
+                        </div>
+                      )}
                       
                       {pendingImageDeletion && !imageInfo.isLocal && (
                         <div className="text-xs text-red-600 font-medium bg-red-50 p-2 rounded text-center">
@@ -702,7 +874,7 @@ const MediaEditor = () => {
                       onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) handleImageUpload(file);
-                        e.target.value = ''; // Reset input
+                        e.target.value = '';
                       }}
                       className="hidden"
                       disabled={imageUploading}
@@ -723,6 +895,16 @@ const MediaEditor = () => {
                         </p>
                       )}
                     </label>
+                    
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={openFolderManagerForFeaturedImage}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        Chọn từ thư viện
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -747,558 +929,23 @@ const MediaEditor = () => {
         </form>
       </div>
 
-      {showMediaManager && (
-        <MediaManager
-          onClose={() => setShowMediaManager(false)} 
-          editorRef={editorRef}
+      {showFolderManager && (
+        <FolderManager
+          onClose={() => setShowFolderManager(false)}
+          onSelect={(images) => {
+            if (folderManagerMode === 'editor') {
+              handleSelectImagesForEditor(images);
+            } else {
+              handleSelectFeaturedImage(images);
+            }
+          }}
+          singleSelect={folderManagerMode === 'featured'}
+          title={folderManagerMode === 'editor' ? 'Chọn ảnh cho bài viết' : 'Chọn ảnh đại diện'}
+          description={folderManagerMode === 'editor' ? 'Chọn ảnh để chèn vào nội dung' : 'Chọn 1 ảnh làm ảnh đại diện'}
+          allowUpload={true}
         />
       )}
     </>
-  );
-};
-
-const MediaManager = ({ onClose, editorRef }) => {
-  const [folders, setFolders] = useState([]);
-  const [currentFolder, setCurrentFolder] = useState(null);
-  const [images, setImages] = useState([]);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    
-    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-      return imagePath;
-    }
-    
-    const baseUrl = 'http://localhost:3000';
-    const normalizedPath = imagePath.replace(/\\/g, '/');
-    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
-    
-    return finalUrl;
-  };
-
-  const loadFolders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await folderService.getFolders();
-      const foldersData = response.data || [];
-      
-      setFolders(foldersData);
-      
-      if (foldersData.length > 0) {
-        const firstFolder = foldersData[0];
-        setCurrentFolder(firstFolder);
-        await loadFolderImages(firstFolder._id);
-      } else {
-        setCurrentFolder(null);
-        setImages([]);
-      }
-    } catch (error) {
-      console.error('Error loading folders:', error);
-      setError('Không thể tải danh sách folder');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadFolders();
-  }, [loadFolders]);
-
-  const loadFolderImages = async (folderId) => {
-    try {
-      const response = await folderService.getFolderById(folderId);
-      const folderData = response.data;
-      setCurrentFolder(folderData);
-      setImages(folderData.images || []);
-    } catch (error) {
-      console.error('Error loading folder images:', error);
-      setError('Không thể tải ảnh từ folder');
-    }
-  };
-
-  const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) return;
-    
-    try {
-      const response = await folderService.createFolder({
-        name: newFolderName.trim()
-      });
-      
-      setFolders(prev => [...prev, response.data]);
-      setNewFolderName('');
-      setShowCreateFolder(false);
-      
-      await loadFolderImages(response.data._id);
-    } catch (error) {
-      console.error('Error creating folder:', error);
-      setError('Không thể tạo folder');
-    }
-  };
-
-  const handleDeleteFolder = async (folderId, event) => {
-    event?.stopPropagation();
-    
-    if (!window.confirm('Bạn có chắc muốn xóa folder này? Tất cả ảnh trong folder sẽ bị xóa.')) {
-      return;
-    }
-
-    try {
-      await folderService.deleteFolder(folderId);
-      
-      const updatedFolders = folders.filter(folder => folder._id !== folderId);
-      setFolders(updatedFolders);
-      
-      if (currentFolder && currentFolder._id === folderId) {
-        if (updatedFolders.length > 0) {
-          const newCurrentFolder = updatedFolders[0];
-          setCurrentFolder(newCurrentFolder);
-          await loadFolderImages(newCurrentFolder._id);
-        } else {
-          setCurrentFolder(null);
-          setImages([]);
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting folder:', error);
-      if (error.response?.data?.message) {
-        setError(error.response.data.message);
-      } else {
-        setError('Không thể xóa folder');
-      }
-    }
-  };
-
-  // Upload ảnh sử dụng pre-signed URLs
-  const handleFileUpload = async (event) => {
-  const files = Array.from(event.target.files);
-  if (files.length === 0 || !currentFolder) return;
-
-  setUploading(true);
-  setError(null);
-
-  try {
-    console.log(`📤 Uploading ${files.length} files to folder: ${currentFolder.name}`);
-    
-    const uploadResult = await b2Service.uploadMultipleFiles(
-      files,
-      `folders/${currentFolder._id}`,
-      (percent) => {
-        console.log(`📊 Overall progress: ${percent}%`);
-        // Update progress bar if needed
-      }
-    );
-    
-    if (!uploadResult.success) {
-      throw new Error(uploadResult.message);
-    }
-    
-    console.log('✅ Upload results:', {
-      total: uploadResult.data.total,
-      successful: uploadResult.data.successful,
-      failed: uploadResult.data.failed
-    });
-    
-    // Save successful uploads to database
-    const savedImages = [];
-    
-    for (const fileData of uploadResult.data.files) {
-      try {
-        const imageData = {
-          url: fileData.url,
-          key: fileData.key,
-          filename: fileData.filename,
-          size: fileData.size
-        };
-        
-        const saveResponse = await folderService.uploadImageToFolder(
-          currentFolder._id,
-          imageData
-        );
-        
-        savedImages.push(saveResponse.data);
-        
-      } catch (saveError) {
-        console.error('❌ Failed to save image to database:', saveError);
-        // Continue with other images
-      }
-    }
-    
-    // Update UI
-    if (savedImages.length > 0) {
-      setImages(prev => [...prev, ...savedImages]);
-      setFolders(prev => prev.map(folder => 
-        folder._id === currentFolder._id 
-          ? { 
-              ...folder, 
-              images: [...(folder.images || []), ...savedImages]
-            }
-          : folder
-      ));
-      
-      console.log(`🎉 Successfully saved ${savedImages.length} images to database`);
-    }
-    
-    // Show errors if any
-    if (uploadResult.data.errors && uploadResult.data.errors.length > 0) {
-      const errorMessages = uploadResult.data.errors.map(e => `${e.filename}: ${e.error}`).join(', ');
-      console.warn('⚠️ Some files failed:', errorMessages);
-      // Optionally show warning to user
-    }
-    
-  } catch (error) {
-    console.error('❌ Upload process failed:', error);
-    setError(`Upload failed: ${error.message}`);
-  } finally {
-    setUploading(false);
-    event.target.value = ''; // Reset input
-  }
-};
-
-  const handleDeleteImage = async (imageId, event) => {
-  event?.stopPropagation();
-  if (!window.confirm('Bạn có chắc muốn xóa ảnh này?')) {
-    return;
-  }
-
-  try {
-    // Get image info to get the B2 key
-    const imageToDelete = images.find(img => img._id === imageId);
-    
-    if (imageToDelete && imageToDelete.key) {
-      // Delete from B2 via proxy
-      const deleteResult = await b2Service.deleteFile(imageToDelete.key);
-      
-      if (!deleteResult.success) {
-        throw new Error(deleteResult.message);
-      }
-      
-      console.log('🗑️ Deleted image from B2:', imageToDelete.key);
-    }
-    
-    // Delete from database
-    await folderService.deleteImage(currentFolder._id, imageId);
-    
-    // Update UI
-    setImages(prev => prev.filter(img => img._id !== imageId));
-    setFolders(prev => prev.map(folder => 
-      folder._id === currentFolder._id 
-        ? { 
-            ...folder, 
-            images: folder.images?.filter(img => img._id !== imageId) || []
-          }
-        : folder
-    ));
-    
-    console.log('✅ Image deleted successfully');
-
-  } catch (error) {
-    console.error('Error deleting image:', error);
-    setError('Không thể xóa ảnh');
-  }
-};
-
-  const handleImageSelect = (image) => {
-    if (editorRef.current) {
-      const editor = editorRef.current;
-      const imageUrl = getImageUrl(image.url);
-      
-      editor.execCommand('mceInsertContent', false, `
-        <img 
-          src="${imageUrl}" 
-          alt="${image.filename}" 
-          style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;"
-          data-image-id="${image._id}"
-        />
-      `);
-    }
-    
-    onClose();
-  };
-
-  const handleFolderSelect = async (folder) => {
-    setCurrentFolder(folder);
-    await loadFolderImages(folder._id);
-  };
-
-  const ImageItem = ({ image }) => {
-    const [imgError, setImgError] = useState(false);
-    const [imgLoading, setImgLoading] = useState(true);
-
-    const handleImageError = () => {
-      setImgError(true);
-      setImgLoading(false);
-    };
-
-    const handleImageLoad = () => {
-      setImgLoading(false);
-    };
-
-    return (
-      <div
-        onClick={() => handleImageSelect(image)}
-        className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all"
-      >
-        <div className="aspect-square bg-gray-100 relative">
-          {imgLoading && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-            </div>
-          )}
-          <img
-            src={imgError ? '/images/placeholder.jpg' : getImageUrl(image.url)}
-            alt={image.filename}
-            className="w-full h-full object-cover"
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-            style={{ display: imgLoading ? 'none' : 'block' }}
-          />
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <button className="bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        
-        <button
-          onClick={(e) => handleDeleteImage(image._id, e)}
-          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        <div className="p-2">
-          <p className="text-xs font-medium text-gray-900 truncate mb-1">
-            {image.filename}
-          </p>
-          <p className="text-xs text-gray-500">
-            {image.size ? `${(image.size / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}
-          </p>
-        </div>
-      </div>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-3 text-gray-600">Đang tải...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-6xl h-[80vh] flex flex-col">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Thư viện Media</h2>
-            <p className="text-gray-600 text-sm">
-              {currentFolder ? `Đang xem: ${currentFolder.name}` : 'Chọn ảnh để chèn vào bài viết'}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {error && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">{error}</p>
-            <button 
-              onClick={() => setError(null)}
-              className="mt-2 text-red-600 hover:text-red-800 text-sm"
-            >
-              Đóng
-            </button>
-          </div>
-        )}
-
-        <div className="flex flex-1 overflow-hidden">
-          <div className="w-64 border-r border-gray-200 bg-gray-50 p-4 overflow-y-auto">
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowCreateFolder(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Tạo thư mục
-              </button>
-
-              {showCreateFolder && (
-                <div className="p-3 bg-white border border-gray-200 rounded-lg space-y-3">
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="Tên thư mục..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    autoFocus
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') handleCreateFolder();
-                    }}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCreateFolder}
-                      className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                    >
-                      Tạo
-                    </button>
-                    <button
-                      onClick={() => setShowCreateFolder(false)}
-                      className="flex-1 bg-gray-300 text-gray-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-400 transition-colors"
-                    >
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1 mt-4">
-                {folders.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Chưa có folder nào
-                  </p>
-                ) : (
-                  folders.map(folder => (
-                    <div
-                      key={folder._id}
-                      className={`group relative flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
-                        currentFolder?._id === folder._id
-                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                          : 'hover:bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      <button
-                        onClick={() => handleFolderSelect(folder)}
-                        className="flex-1 flex items-center gap-3 text-left"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
-                        <span className="font-medium truncate">{folder.name}</span>
-                      </button>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                          {folder.images?.length || 0}
-                        </span>
-                        
-                        <button
-                          onClick={(e) => handleDeleteFolder(folder._id, e)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 transition-opacity"
-                          title="Xóa folder"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
-            {currentFolder ? (
-              <>
-                <div className="mb-6">
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <svg className="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      <p className="mb-2 text-sm text-gray-500">
-                        <span className="font-semibold">Nhấp để tải lên</span> hoặc kéo thả
-                      </p>
-                      <p className="text-xs text-gray-500">PNG, JPG, GIF (Tối đa 10MB)</p>
-                    </div>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      disabled={uploading}
-                    />
-                  </label>
-                </div>
-
-                {uploading && (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span className="ml-3 text-gray-600">Đang tải lên...</span>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {images.map(image => (
-                    <ImageItem key={image._id} image={image} />
-                  ))}
-                </div>
-
-                {images.length === 0 && !uploading && (
-                  <div className="text-center py-12">
-                    <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Không có ảnh nào</h3>
-                    <p className="text-gray-600">Tải lên ảnh đầu tiên của bạn</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Chọn một folder</h3>
-                <p className="text-gray-600">Chọn folder từ sidebar để xem ảnh</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 p-4 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-600">
-              {currentFolder 
-                ? `Đang xem: ${currentFolder.name} • ${images.length} ảnh`
-                : 'Chọn folder để bắt đầu'
-              }
-            </p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 };
 

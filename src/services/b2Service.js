@@ -7,13 +7,6 @@ export const b2Service = {
   // Main upload method - always via backend proxy
   uploadFile: async (file, folder = 'general', onProgress = null) => {
     try {
-      // console.log('🔄 Starting file upload via backend proxy...', {
-      //   name: file.name,
-      //   size: (file.size / 1024 / 1024).toFixed(2) + 'MB',
-      //   type: file.type,
-      //   folder
-      // });
-
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', folder);
@@ -22,7 +15,7 @@ export const b2Service = {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
-        timeout: 60000, // 60 seconds timeout
+        timeout: 300000, // 60 seconds timeout
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total && onProgress) {
             const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -30,13 +23,6 @@ export const b2Service = {
           }
         }
       });
-
-      // console.log('✅ Upload successful:', {
-      //   filename: response.data.data.filename,
-      //   size: (response.data.data.size / 1024 / 1024).toFixed(2) + 'MB',
-      //   url: response.data.data.url,
-      //   optimized: response.data.data.optimized
-      // });
 
       return {
         success: true,
@@ -119,21 +105,33 @@ export const b2Service = {
   },
 
   // Delete file
-  deleteFile: async (fileKey) => {
+  deleteFile: async (data) => {
     try {
-      // console.log('🗑️ Deleting file:', fileKey);
+      
+      let fileKey, thumbnailKey;
+      
+      if (typeof data === 'string') {
+        // Cách gọi cũ: deleteFile(fileKey)
+        fileKey = data;
+      } else if (typeof data === 'object' && data !== null) {
+        fileKey = data.fileKey;
+        thumbnailKey = data.thumbnailKey;
+      } else {
+        throw new Error('Invalid parameter for deleteFile');
+      }
+      
       
       const response = await axiosClient.delete('/v1/b2/files', {
-        data: { fileKey },
+        data: { fileKey, thumbnailKey }, // ✅ Gửi cả 2 key
         timeout: 10000
       });
       
-      // console.log('✅ File deleted successfully');
+      console.log('✅ File deleted successfully');
       
       return {
         success: true,
         data: response.data,
-        message: 'File deleted successfully'
+        message: 'File(s) deleted successfully'
       };
       
     } catch (error) {
@@ -147,19 +145,14 @@ export const b2Service = {
     }
   },
 
-  // List files in folder
   listFiles: async (folder = '', options = {}) => {
     try {
       const { prefix = '', limit = 100 } = options;
-      
-      // console.log('📋 Listing files:', { folder, prefix });
       
       const response = await axiosClient.get('/v1/b2/files', {
         params: { folder, prefix, limit },
         timeout: 10000
       });
-      
-      // console.log(`✅ Found ${response.data.data.total} files`);
       
       return {
         success: true,
