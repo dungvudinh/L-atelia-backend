@@ -69,7 +69,7 @@ const Projects = () => {
   // ✅ Hàm lấy URL ảnh - ƯU TIÊN THUMBNAIL CHO DANH SÁCH
   const getImageUrl = (imageData, preferThumbnail = true) => {
     if (!imageData) return null;
-    
+    console.log(imageData)
     // Nếu imageData là string (URL cũ)
     if (typeof imageData === 'string') {
       if (imageData.startsWith('http') || imageData.startsWith('https')) {
@@ -101,11 +101,11 @@ const Projects = () => {
 
   // ✅ Hàm hiển thị ảnh thumbnail - SỬ DỤNG THUMBNAIL CHO DANH SÁCH
   const renderThumbnail = (project) => {
-    const imageData = project.heroImage;
+   
     
     // Ưu tiên thumbnail cho danh sách
-    const displayUrl = imageData ? getImageUrl(imageData, true) : null;
-    
+    const displayUrl = 'https://cdn.latelia.com/latelia/' + project.heroImage.thumbnailKey;
+    console.log(displayUrl)
     if (displayUrl) {
       return (
         <div className="relative w-full h-full">
