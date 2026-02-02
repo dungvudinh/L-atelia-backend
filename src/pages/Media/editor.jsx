@@ -98,7 +98,7 @@ const MediaEditor = () => {
       const editor = editorRef.current;
       
       selectedImages.forEach(image => {
-        const imageUrl = image.url;
+        const imageUrl = 'https://cdn.latelia.com/latelia/' + image.key;
         console.log('📝 Inserting image into editor:', imageUrl);
         editor.execCommand('mceInsertContent', false, `
           <img 

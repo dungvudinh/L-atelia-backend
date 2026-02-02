@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { folderService } from '../../services/folderService';
 import { b2Service } from '../../services/b2Service';
 
+const BASE_CDN_URL = 'http://cdn.latelia.com/latelia/'
 const FolderManager = ({ 
   onClose, 
   onSelect, 
@@ -26,23 +27,23 @@ const FolderManager = ({
   const getImageUrl = (image, preferThumbnail = true) => {
     if (!image) return null;
     
-    let imagePath = image.url;
+    let imageKey = image.key;
     
     // Ưu tiên thumbnail nếu có và user muốn dùng
-    if (preferThumbnail && useThumbnails && image.thumbnailUrl) {
-      imagePath = image.thumbnailUrl;
+    if (preferThumbnail && useThumbnails && image.thumbnailKey) {
+      imageKey = image.thumbnailKey;
     }
     
-    if (!imagePath) return null;
+    if (!imageKey) return null;
     
-    if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
-      return imagePath;
-    }
+    // if (imagePath.startsWith('http') || imagePath.startsWith('blob:') || imagePath.startsWith('data:')) {
+    //   return imagePath;
+    // }
     
-    const baseUrl = 'http://localhost:3000';
-    const normalizedPath = imagePath.replace(/\\/g, '/');
-    let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
-    
+    // const baseUrl = 'http://localhost:3000';
+    // const normalizedPath = imagePath.replace(/\\/g, '/');
+    // let finalUrl = `${baseUrl}${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`;
+    let finalUrl = BASE_CDN_URL + imageKey;
     return finalUrl;
   };
 

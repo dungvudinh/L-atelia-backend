@@ -185,8 +185,7 @@ const Media = () => {
       );
     }
 
-    const displayUrl = mediaItem.featuredImage.thumbnailUrl || mediaItem.featuredImage.url;
-
+    const displayUrl = 'https://cdn.latelia.com/latelia/'+mediaItem.featuredImage.thumbnailKey || mediaItem.featuredImage.key;
     return (
       <>
         {isLoading && (
