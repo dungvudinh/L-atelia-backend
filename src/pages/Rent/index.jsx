@@ -202,11 +202,11 @@ const RentList = () => {
   };
 
   const getThumbnailUrl = (rental) => {
-    if (rental.featuredImage) {
-      return rental.featuredImage;
+    if (rental.featuredImage.thumbnailKey) {
+      return 'https://cdn.latelia.com/latelia/' + rental.featuredImage.thumbnailKey;
     }
     if (rental.gallery && rental.gallery.length > 0) {
-      return rental.gallery[0].url;
+      return 'https://cdn.latelia.com/latelia/' + rental.gallery[0].thumbnailKey || rental.gallery[0].key;
     }
     return '/images/placeholder-property.jpg';
   };
