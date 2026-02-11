@@ -10,14 +10,12 @@ const authService = {
   // Login
   login: async (username, password) => {
     try {
-      console.log('🟡 Auth Service - Sending login request...')
       
       const response = await axiosClient.post('/v1/auth/login', {
         username,
         password
       })
       
-      console.log('🟢 Auth Service - Login response:', response.data)
       return response.data
     } catch (error) {
       console.log('🔴 Auth Service - Catch error:', {

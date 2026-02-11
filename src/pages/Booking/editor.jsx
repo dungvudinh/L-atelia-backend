@@ -63,7 +63,6 @@ const BookingEditor = () => {
         setLoading(true);
         try {
           const bookingData = await bookingService.getBookingById(bookingId);
-          console.log('Booking data:', bookingData);
           
           const booking = bookingData.data || bookingData;
           const transformedData = {

@@ -60,7 +60,6 @@ export const b2Service = {
   // Upload multiple files
   uploadMultipleFiles: async (files, folder = 'general', onProgress = null) => {
     try {
-      // console.log(`📦 Uploading ${files.length} files...`);
 
       const formData = new FormData();
       files.forEach((file, index) => {
@@ -81,11 +80,7 @@ export const b2Service = {
         }
       });
 
-      // console.log('✅ Multiple upload completed:', {
-      //   total: response.data.data.total,
-      //   successful: response.data.data.successful,
-      //   failed: response.data.data.failed
-      // });
+      
 
       return {
         success: true,
@@ -126,7 +121,6 @@ export const b2Service = {
         timeout: 10000
       });
       
-      console.log('✅ File deleted successfully');
       
       return {
         success: true,
@@ -174,13 +168,11 @@ export const b2Service = {
   // Get file info
   getFileInfo: async (fileKey) => {
     try {
-      // console.log('📄 Getting file info for:', fileKey);
       
       const response = await axiosClient.get(`/v1/b2/files/${encodeURIComponent(fileKey)}`, {
         timeout: 10000
       });
       
-      // console.log('✅ File info retrieved');
       
       return {
         success: true,

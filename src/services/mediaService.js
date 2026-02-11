@@ -51,7 +51,6 @@ export const mediaService = {
   // Update media
   updateMedia: async (id, mediaData) => {
     try {
-      console.log(mediaData)
       const response = await axiosClient.put(`/v1/media/${id}`, mediaData);
       
       return response.data;
@@ -77,10 +76,8 @@ export const mediaService = {
   // Bulk delete media
   bulkDeleteMedia: async (ids) => {
     try {
-      console.log(`🗑️ Bulk deleting media:`, ids);
       
       const response = await axiosClient.post('/v1/media/bulk-delete', { ids });
-      console.log('✅ Media bulk deleted successfully');
       
       return response.data;
     } catch (error) {
@@ -92,14 +89,12 @@ export const mediaService = {
   // Upload featured image
   uploadFeaturedImage: async (formData) => {
     try {
-      console.log('🖼️ Uploading featured image');
       
       const response = await axiosClient.post('/v1/media/upload-featured-image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
-      console.log('✅ Featured image uploaded successfully');
       
       return response.data;
     } catch (error) {
@@ -111,7 +106,6 @@ export const mediaService = {
   // Delete featured image
   deleteFeaturedImage: async (imageKey) => {
     try {
-      // console.log(`🗑️ Deleting featured image: ${imageInfo}`);
       
       const response = await axiosClient.delete(`/v1/media/delete-featured-image`, {
         data:{
@@ -120,7 +114,6 @@ export const mediaService = {
           // filename:imageInfo.filename
         }
       });
-      console.log('✅ Featured image deleted successfully');
       
       return response.data;
     } catch (error) {
@@ -132,12 +125,10 @@ export const mediaService = {
   // Get media by category
   getMediaByCategory: async (category) => {
     try {
-      console.log(`📋 Fetching media with category: ${category}`);
       
       const response = await axiosClient.get('/v1/media', { 
         params: { category } 
       });
-      console.log('✅ Media fetched by category successfully');
       
       return response.data;
     } catch (error) {

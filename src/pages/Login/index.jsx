@@ -53,10 +53,8 @@ const Login = () => {
     setError('')
 
     try {
-      console.log('🔐 Login Component - Starting login process...')
       
       const result = await authService.login(formData.username, formData.password)
-      console.log('✅ Login Component - Login successful:', result)
       
       if (result.success) {
         // Store user data

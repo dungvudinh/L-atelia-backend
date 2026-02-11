@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Base URL cho production
-const API_BASE_URL = 'https://l-atelia-api-yct5.onrender.com';
+const API_BASE_URL = 'http://localhost:3000';
 
 // Tạo axios instance đơn giản
 const axiosClient = axios.create({

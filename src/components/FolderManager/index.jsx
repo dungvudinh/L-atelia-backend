@@ -294,7 +294,6 @@ const FolderManager = ({
       // ✅ Log thông tin thumbnail
       const thumbnailsCount = folderData.images?.filter(img => img.thumbnailUrl).length || 0;
       const totalImages = folderData.images?.length || 0;
-      console.log(`📊 Loaded ${totalImages} images, ${thumbnailsCount} have thumbnails`);
       
     } catch (error) {
       console.error('Error loading folder images:', error);
@@ -364,7 +363,6 @@ const FolderManager = ({
     try {
       // Chỉ lấy file đầu tiên (vì input chỉ cho phép 1 file)
       const file = files[0];
-      console.log(`📤 Uploading 1 file to folder: ${currentFolder.name}`);
 
       const uploadResult = await b2Service.uploadFile(
         file,
@@ -378,7 +376,6 @@ const FolderManager = ({
         throw new Error(uploadResult.message);
       }
 
-      console.log('✅ Upload result:', uploadResult.data);
 
       // Save to database
       const imageData = {
@@ -408,7 +405,6 @@ const FolderManager = ({
           : folder
       ));
 
-      console.log('✅ Image saved to database');
 
     } catch (error) {
       console.error('❌ Upload process failed:', error);
@@ -440,10 +436,7 @@ const FolderManager = ({
           throw new Error(deleteResult.message);
         }
         
-        console.log('🗑️ Deleted image and thumbnail from B2:', {
-          original: imageToDelete.key,
-          thumbnail: imageToDelete.thumbnailKey
-        });
+       
       }
       
       // Delete from database
@@ -460,7 +453,6 @@ const FolderManager = ({
           : folder
       ));
       
-      console.log('✅ Image deleted successfully');
   
     } catch (error) {
       console.error('Error deleting image:', error);

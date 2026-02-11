@@ -33,7 +33,6 @@ export const imageUploadService = {
   // Xóa ảnh tạm thời khi hủy
   deleteTempImages: async (tempIds) => {
     try {
-      console.log('Dữ liệu tempIds gửi đi:', tempIds);
       const response = await axiosClient.post('/v1/images/delete-temp', { tempIds });
       return response.data;
     } catch (error) {

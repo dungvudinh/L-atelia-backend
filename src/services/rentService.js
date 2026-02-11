@@ -24,7 +24,6 @@ const rentService = {
   // CREATE NEW RENTAL
   createRental: async (rentalData) => {
     try {
-      console.log(rentalData)
       const response = await axiosClient.post('/v1/rent', rentalData);
       return response.data;
     } catch (error) {
@@ -35,7 +34,6 @@ const rentService = {
   // UPDATE RENTAL
   updateRental: async (id, rentalData) => {
     try {
-      console.log(rentalData)
       const response = await axiosClient.put(`/v1/rent/${id}`, rentalData);
       return response.data;
     } catch (error) {

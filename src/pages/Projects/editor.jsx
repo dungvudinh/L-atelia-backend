@@ -7,9 +7,10 @@ import { projectService } from '../../services/projectService';
 import FolderManager from '../../components/FolderManager';
 
 // Hàm tạo special sections mặc định
+// Sửa hàm tạo special sections mặc định
 const getDefaultSpecialSections = () => [
   {
-    id: 'spectacular-architecture',
+    id: `special-${Date.now()}-1-${Math.random().toString(36).substr(2, 9)}`,
     type: 'architecture',
     title: 'SPECTACULAR ARCHITECTURE',
     shortDescription: 'Designed by Parisian architects in the late 19th century this property exudes french charm with an air of grandeur and opulence rarely seen anywhere else on the island.',
@@ -17,7 +18,7 @@ const getDefaultSpecialSections = () => [
     isExpandable: true
   },
   {
-    id: 'the-history',
+    id: `special-${Date.now()}-2-${Math.random().toString(36).substr(2, 9)}`,
     type: 'history',
     title: 'THE HISTORY',
     shortDescription: 'When scientists discovered the health benefits of vitamin C in the late 18th century Sóller\'s citrus trade boomed and the town saw a massive influx of wealth.',
@@ -25,7 +26,7 @@ const getDefaultSpecialSections = () => [
     isExpandable: true
   },
   {
-    id: 'immataculate-details',
+    id: `special-${Date.now()}-3-${Math.random().toString(36).substr(2, 9)}`,
     type: 'details',
     title: 'IMMATECULATE DETAILS',
     shortDescription: 'The extensive reformation saw all the historic sections painstakingly restored to their original glory while adding modern comforts and luxuries throughout.',
@@ -91,7 +92,6 @@ export default function ProjectEditor() {
   }, [isDirty]);
 
   // Load project data
-  console.log('PROJECT DETAIL', project);
   const loadProject = async (id) => {
     try {
       setIsProcessing(true);
@@ -99,6 +99,81 @@ export default function ProjectEditor() {
       const res = await projectService.getProjectById(id);
       const p = res.data;
 
+      // 🔥 QUAN TRỌNG: Đảm bảo mỗi property feature có ID duy nhất
+      const propertyFeaturesWithIds = (p.propertyFeatures || []).map((feature, index) => {
+      // Nếu feature là string thì chuyển thành object
+        if (typeof feature === 'string') {
+          return {
+            id: `feature-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+            text: feature
+          };
+        }
+        // Nếu đã có object thì kiểm tra ID
+        return {
+          id: feature.id || `feature-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+          text: feature.text || ''
+        };
+      });
+      const specificationsWithIds = (p.specifications || []).map((spec, index) => {
+        if (typeof spec === 'string') {
+          return {
+            id: `spec-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+            text: spec
+          };
+        }
+        return {
+          id: spec.id || `spec-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+          text: spec.text || ''
+        };
+      });
+      const propertyHighlightsWithIds = (p.propertyHighlights || []).map((highlight, highlightIndex) => {
+        // Đảm bảo highlight có ID
+        const highlightWithId = {
+          id: highlight.id || `highlight-${Date.now()}-${highlightIndex}-${Math.random().toString(36).substr(2, 5)}`,
+          title: highlight.title || '',
+          description: highlight.description || '',
+          featureSections: []
+        };
+  
+        // ✅ FIX QUAN TRỌNG: Xử lý Feature Sections với ID duy nhất
+        highlightWithId.featureSections = (highlight.featureSections || []).map((section, sectionIndex) => {
+          // Nếu section là string thì chuyển thành object
+          if (typeof section === 'string') {
+            return {
+              id: `section-${Date.now()}-${highlightIndex}-${sectionIndex}-${Math.random().toString(36).substr(2, 5)}`,
+              name: section,
+              description: ''
+            };
+          }
+          
+          // Nếu đã là object thì đảm bảo có ID và đủ fields
+          return {
+            id: section.id || `section-${Date.now()}-${highlightIndex}-${sectionIndex}-${Math.random().toString(36).substr(2, 5)}`,
+            name: section.name || section.title || '',
+            description: section.description || ''
+          };
+        });
+  
+        return highlightWithId;
+      });
+      let specialSectionsWithIds;
+      if (p.specialSections && p.specialSections.length > 0) {
+        // Nếu có dữ liệu từ API, đảm bảo mỗi section có ID duy nhất
+        specialSectionsWithIds = p.specialSections.map((section, index) => ({
+          id: section.id || `special-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`,
+          type: section.type || 'custom',
+          title: section.title || '',
+          shortDescription: section.shortDescription || '',
+          fullDescription: section.fullDescription || '',
+          isExpandable: section.isExpandable !== undefined ? section.isExpandable : true
+        }));
+      } else {
+        // Nếu không có, dùng mặc định và tạo ID
+        specialSectionsWithIds = getDefaultSpecialSections().map((section, index) => ({
+          ...section,
+          id: `special-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`
+        }));
+      }
       // Set basic project data
       setProject({
         title: p.title || '',
@@ -107,13 +182,13 @@ export default function ProjectEditor() {
         location: p.location || '',
         heroImage: p.heroImage || null,
         gallery: p.gallery || [],
-        propertyFeatures: p.propertyFeatures || [],
-        specifications: p.specifications || [],
+        propertyFeatures: propertyFeaturesWithIds,
+        specifications:specificationsWithIds,  
         constructionProgress: p.constructionProgress || [],
         designImages: p.designImages || [],
         brochure: p.brochure || [],
-        propertyHighlights: p.propertyHighlights || [],
-        specialSections: p.specialSections && p.specialSections.length > 0 ? p.specialSections : getDefaultSpecialSections()
+        propertyHighlights:propertyHighlightsWithIds,
+        specialSections: specialSectionsWithIds
       });
 
       // Set previews
@@ -306,7 +381,6 @@ export default function ProjectEditor() {
   
   // Nếu imageData là object có thumbnail, ưu tiên thumbnail
   if (typeof imageData === 'object' && imageData.thumbnailUrl) {
-    console.log('Using thumbnail for preview:', imageData.thumbnailUrl);
     return imageData.thumbnailUrl;
   }
   
@@ -333,8 +407,9 @@ export default function ProjectEditor() {
 
   // Property Features Functions
   const addPropertyFeature = () => {
+    // ✅ Tạo ID duy nhất với timestamp + random string
     const newFeature = {
-      id: `feature-${Date.now()}`,
+      id: `feature-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text: ''
     };
     setProject(prev => ({
@@ -396,7 +471,7 @@ export default function ProjectEditor() {
   // Property Highlights Functions
   const addPropertyHighlight = () => {
     const newHighlight = {
-      id: `highlight-${Date.now()}`,
+      id: `highlight-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title: '',
       description: '',
       featureSections: []
@@ -412,7 +487,9 @@ export default function ProjectEditor() {
     setProject(prev => ({
       ...prev,
       propertyHighlights: prev.propertyHighlights.map(highlight =>
-        highlight.id === id ? { ...highlight, [field]: value } : highlight
+        highlight.id === id
+          ? { ...highlight, [field]: value }  // Tạo object mới
+          : highlight
       )
     }));
     setIsDirty(true);
@@ -429,15 +506,19 @@ export default function ProjectEditor() {
   // Feature Section Functions (trong Property Highlight)
   const addFeatureSection = (highlightId) => {
     const newSection = {
-      id: `section-${Date.now()}`,
+      id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: '',
       description: ''
     };
+    
     setProject(prev => ({
       ...prev,
       propertyHighlights: prev.propertyHighlights.map(highlight =>
         highlight.id === highlightId
-          ? { ...highlight, featureSections: [...highlight.featureSections, newSection] }
+          ? {
+              ...highlight,
+              featureSections: [...(highlight.featureSections || []), newSection]
+            }
           : highlight
       )
     }));
@@ -445,19 +526,26 @@ export default function ProjectEditor() {
   };
 
   const updateFeatureSection = (highlightId, sectionId, field, value) => {
-    setProject(prev => ({
-      ...prev,
-      propertyHighlights: prev.propertyHighlights.map(highlight =>
-        highlight.id === highlightId
-          ? {
-              ...highlight,
-              featureSections: highlight.featureSections.map(section =>
-                section.id === sectionId ? { ...section, [field]: value } : section
-              )
-            }
-          : highlight
-      )
-    }));
+    setProject(prev => {
+      // Log để debug
+      
+  
+      return {
+        ...prev,
+        propertyHighlights: prev.propertyHighlights.map(highlight => {
+          if (highlight.id !== highlightId) return highlight;
+          
+          return {
+            ...highlight,
+            featureSections: highlight.featureSections.map(section =>
+              section.id === sectionId
+                ? { ...section, [field]: value }  // Tạo object mới
+                : section
+            )
+          };
+        })
+      };
+    });
     setIsDirty(true);
   };
 
@@ -468,7 +556,9 @@ export default function ProjectEditor() {
         highlight.id === highlightId
           ? {
               ...highlight,
-              featureSections: highlight.featureSections.filter(section => section.id !== sectionId)
+              featureSections: highlight.featureSections.filter(
+                section => section.id !== sectionId
+              )
             }
           : highlight
       )
@@ -478,56 +568,68 @@ export default function ProjectEditor() {
 
   // Special Sections Functions
   const updateSpecialSection = (id, field, value) => {
-    setProject(prev => ({
-      ...prev,
-      specialSections: prev.specialSections.map(section =>
-        section.id === id ? { ...section, [field]: value } : section
-      )
-    }));
+    setProject(prev => {
+      // Log để debug
+      
+  
+      return {
+        ...prev,
+        specialSections: prev.specialSections.map(section =>
+          section.id === id 
+            ? { ...section, [field]: value }  // Tạo object mới, không mutate
+            : section
+        )
+      };
+    });
     setIsDirty(true);
   };
 
   const toggleSpecialSectionExpandable = (id) => {
-    setProject(prev => ({
-      ...prev,
-      specialSections: prev.specialSections.map(section =>
-        section.id === id ? { ...section, isExpandable: !section.isExpandable } : section
-      )
-    }));
+    setProject(prev => {
+      
+      return {
+        ...prev,
+        specialSections: prev.specialSections.map(section =>
+          section.id === id 
+            ? { ...section, isExpandable: !section.isExpandable }  // Tạo object mới
+            : section
+        )
+      };
+    });
     setIsDirty(true);
   };
-  const renderThumbnail = (project) => {
-  const imageData = project.heroImage;
+//   const renderThumbnail = (project) => {
+//   const imageData = project.heroImage;
   
-  if (imageData) {
-    // Ưu tiên thumbnail trong editor
-    const displayUrl = imageData.thumbnailUrl || imageData.url;
-    return (
-      <img 
-        src={displayUrl} 
-        alt={project.title}
-        className="w-full h-full object-cover"
-        onError={(e) => {
-          console.error('Image failed to load:', displayUrl);
-          // Fallback về ảnh gốc nếu thumbnail lỗi
-          if (imageData.url && displayUrl === imageData.thumbnailUrl) {
-            e.target.src = imageData.url;
-          } else {
-            e.target.src = 'https://via.placeholder.com/40x40?text=Error';
-          }
-        }}
-        onLoad={() => console.log('Thumbnail loaded successfully:', project.title)}
-        loading="lazy"
-      />
-    );
-  } else {
-    return (
-      <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-        <Image size={16} className="text-gray-500" />
-      </div>
-    );
-  }
-};
+//   if (imageData) {
+//     // Ưu tiên thumbnail trong editor
+//     const displayUrl = imageData.thumbnailUrl || imageData.url;
+//     return (
+//       <img 
+//         src={displayUrl} 
+//         alt={project.title}
+//         className="w-full h-full object-cover"
+//         onError={(e) => {
+//           console.error('Image failed to load:', displayUrl);
+//           // Fallback về ảnh gốc nếu thumbnail lỗi
+//           if (imageData.url && displayUrl === imageData.thumbnailUrl) {
+//             e.target.src = imageData.url;
+//           } else {
+//             e.target.src = 'https://via.placeholder.com/40x40?text=Error';
+//           }
+//         }}
+//         onLoad={() => console.log('Thumbnail loaded successfully:', project.title)}
+//         loading="lazy"
+//       />
+//     );
+//   } else {
+//     return (
+//       <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+//         <Image size={16} className="text-gray-500" />
+//       </div>
+//     );
+//   }
+// };
 
 // Trong các phần hiển thị ảnh, thêm badge thumbnail
 {galleryPreview.map((img, i) => (
@@ -598,7 +700,6 @@ export default function ProjectEditor() {
         brochure: project.brochure
       };
       
-      console.log('Sending project data (JSON):', projectData);
       
       let result;
       if (isEditMode) {

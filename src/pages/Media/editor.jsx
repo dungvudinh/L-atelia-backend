@@ -93,13 +93,11 @@ const MediaEditor = () => {
 
   const handleSelectImagesForEditor = (selectedImages) => {
     if (!selectedImages || selectedImages.length === 0) return;
-    console.log('📝 Selected images for editor:', selectedImages);
     if (editorRef.current && isEditorReady) {
       const editor = editorRef.current;
       
       selectedImages.forEach(image => {
         const imageUrl = 'https://cdn.latelia.com/latelia/' + image.key;
-        console.log('📝 Inserting image into editor:', imageUrl);
         editor.execCommand('mceInsertContent', false, `
           <img 
             src="${imageUrl}" 
@@ -109,7 +107,6 @@ const MediaEditor = () => {
         `);
       });
       
-      console.log(`✅ Đã chèn ${selectedImages.length} ảnh gốc vào editor`);
     } else {
       console.error('❌ Editor chưa sẵn sàng');
     }
@@ -157,7 +154,6 @@ const MediaEditor = () => {
       
       setErrorMessage('');
       
-      console.log('📝 Selected featured image from FolderManager:', newImage);
       
     } catch (error) {
       console.error('❌ Error selecting featured image from FolderManager:', error);
@@ -210,11 +206,7 @@ const MediaEditor = () => {
       
       setErrorMessage('');
       
-      console.log('📝 Prepared image for upload:', {
-        filename: uniqueFilename,
-        size: file.size,
-        type: file.type
-      });
+      
       
     } catch (error) {
       console.error('❌ Error preparing image:', error);
@@ -226,7 +218,6 @@ const MediaEditor = () => {
 
   const uploadImageToB2 = async (file) => {
   try {
-    console.log('🚀 Uploading featured image via proxy...');
     
     // 🔴 THÊM: Upload ảnh vào path /latelia/media/
     const uploadResult = await b2Service.uploadFile(
@@ -236,12 +227,10 @@ const MediaEditor = () => {
         console.log(`📊 Upload progress: ${percent}%`);
       }
     );
-    console.log('uploadResult:', uploadResult)
     if (!uploadResult.success) {
       throw new Error(uploadResult.message);
     }
     
-    console.log('✅ Featured image uploaded to /latelia/media/:', uploadResult.data);
     
     return {
      ...uploadResult.data, 
@@ -267,13 +256,7 @@ const MediaEditor = () => {
                               (imageData.key && imageData.key.includes('/media/')) ||
                               (imageData.url && imageData.url.includes('/latelia/media/'));
       
-      console.log('🔍 Checking if should delete from B2:', {
-        imageKey,
-        isFromMediaUpload: imageData.isFromMediaUpload,
-        keyIncludesMedia: imageData.key?.includes('/media/'),
-        urlIncludesMedia: imageData.url?.includes('/latelia/media/'),
-        shouldDelete: isFromMediaPath
-      });
+      
       
       // 🔴 CHỈ xóa nếu ảnh từ path /latelia/media/
       if (!isFromMediaPath) {
@@ -282,9 +265,7 @@ const MediaEditor = () => {
       }
     }
     
-    console.log('🗑️ Deleting image from B2 /latelia/media/:', imageKey);
     await b2Service.deleteFile(imageKey);
-    console.log('✅ Image deleted from B2');
     
   } catch (error) {
     console.error('❌ Failed to delete image from B2:', error);
@@ -305,11 +286,7 @@ const MediaEditor = () => {
                              (originalFeaturedImage.key && originalFeaturedImage.key.includes('/media/')) ||
                              (originalFeaturedImage.url && originalFeaturedImage.url.includes('/latelia/media/'));
     
-    if (isFromMediaUpload) {
-      console.log('🗑️ Will delete image from /latelia/media/');
-    } else {
-      console.log('⚠️ Image is from folders/ - Will NOT delete from B2');
-    }
+    
     
     setPendingImageDeletion(true);
   }
@@ -401,12 +378,7 @@ const handleSubmit = async (e) => {
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
     };
 
-    console.log('📤 Submitting media data with image check:', {
-      pendingImageUpload: !!pendingImageUpload,
-      selectedImageFromFolder: !!selectedImageFromFolder,
-      pendingImageDeletion: pendingImageDeletion,
-      originalFeaturedImage: !!originalFeaturedImage,
-    });
+    
 
     // 🟢 LOGIC ĐƠN GIẢN HÓA:
     
@@ -415,9 +387,7 @@ const handleSubmit = async (e) => {
     
     // 1. Ưu tiên ảnh mới từ upload (sẽ lưu vào /latelia/media/)
     if (pendingImageUpload) {
-      console.log('🚀 Uploading new image to B2 /latelia/media/...');
       const uploadedImage = await uploadImageToB2(pendingImageUpload);
-      console.log('uploadedImage', uploadedImage);
       featuredImageToSave = {
         ...uploadedImage, 
         isFromMediaUpload: true, // 🔴 Đánh dấu đây là ảnh từ MediaEditor
@@ -427,7 +397,6 @@ const handleSubmit = async (e) => {
     }
     // 2. Ưu tiên ảnh mới từ FolderManager (path: /latelia/folders/.../)
     else if (selectedImageFromFolder) {
-      console.log('🖼️ Using image selected from FolderManager (folders/)');
       featuredImageToSave = {
         url: selectedImageFromFolder.url,
         thumbnailUrl: selectedImageFromFolder.thumbnailUrl,
@@ -479,12 +448,7 @@ const handleSubmit = async (e) => {
                                        (originalFeaturedImage.key && originalFeaturedImage.key.includes('/media/')) ||
                                        (originalFeaturedImage.url && originalFeaturedImage.url.includes('/latelia/media/'));
       
-      console.log('🔍 Old image source check:', {
-        key: originalFeaturedImage.key,
-        url: originalFeaturedImage.url,
-        isFromMediaUpload: originalFeaturedImage.isFromMediaUpload,
-        isOldImageFromMediaUpload: isOldImageFromMediaUpload
-      });
+      
       
       // Chỉ xóa ảnh cũ nếu:
       // 1. Có ảnh mới thay thế VÀ ảnh cũ từ MediaEditor
@@ -497,7 +461,6 @@ const handleSubmit = async (e) => {
       if (shouldDeleteOldImage) {
         try {
           await deleteImageFromB2(originalFeaturedImage.key, originalFeaturedImage);
-          console.log('✅ Deleted old image from B2 /latelia/media/');
         } catch (deleteError) {
           console.warn('⚠️ Could not delete old image from B2:', deleteError.message);
         }
@@ -509,16 +472,13 @@ const handleSubmit = async (e) => {
     // Thêm featuredImage vào submitData
     submitData.featuredImage = featuredImageToSave || '';
 
-    console.log('📤 Final data to submit:', submitData);
 
     // Gửi dữ liệu lên server
     let result;
     if (isEditing) {
       result = await mediaService.updateMedia(mediaId, submitData);
-      console.log('✅ Media updated successfully:', result);
     } else {
       result = await mediaService.createMedia(submitData);
-      console.log('✅ Media created successfully:', result);
     }
 
     // Cleanup

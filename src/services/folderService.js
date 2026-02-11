@@ -60,7 +60,6 @@ export const folderService = {
   // Upload images to folder using pre-signed URLs
   uploadImages: async (folderId, formData) => {
     try {
-      console.log(`🔄 Uploading images to folder: ${folderId}`);
       
       const response = await axiosClient.post(`/v1/folders/${folderId}/upload`, formData, {
         headers: {
@@ -68,7 +67,6 @@ export const folderService = {
         },
       });
       
-      console.log('✅ Images uploaded successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Error in uploadImages service:', error);
@@ -79,11 +77,9 @@ export const folderService = {
   // NEW: Upload single image info (after direct B2 upload)
   uploadImageToFolder: async (folderId, imageData) => {
     try {
-      console.log(`🖼️ Saving image info to folder: ${folderId}`, imageData);
       
       const response = await axiosClient.post(`/v1/folders/${folderId}/images`, imageData);
       
-      console.log('✅ Image info saved successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Error in uploadImageToFolder service:', error);
@@ -94,10 +90,8 @@ export const folderService = {
   // Delete image from folder
   deleteImage: async (folderId, imageId) => {
     try {
-      console.log(`🗑️ Deleting image ${imageId} from folder ${folderId}`);
       
       const response = await axiosClient.delete(`/v1/folders/${folderId}/images/${imageId}`);
-      console.log('✅ Image deleted successfully');
       
       return response.data;
     } catch (error) {

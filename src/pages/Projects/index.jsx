@@ -29,7 +29,6 @@ const Projects = () => {
       setLoading(true);
       setError(null);
       const response = await projectService.getProjects();
-      console.log('API Response:', response);
       
       if (response.success) {
         const projectsData = response.data.projects || [];
@@ -69,7 +68,6 @@ const Projects = () => {
   // ✅ Hàm lấy URL ảnh - ƯU TIÊN THUMBNAIL CHO DANH SÁCH
   const getImageUrl = (imageData, preferThumbnail = true) => {
     if (!imageData) return null;
-    console.log(imageData)
     // Nếu imageData là string (URL cũ)
     if (typeof imageData === 'string') {
       if (imageData.startsWith('http') || imageData.startsWith('https')) {
@@ -105,7 +103,6 @@ const Projects = () => {
     
     // Ưu tiên thumbnail cho danh sách
     const displayUrl = 'https://cdn.latelia.com/latelia/' + project.heroImage.thumbnailKey;
-    console.log(displayUrl)
     if (displayUrl) {
       return (
         <div className="relative w-full h-full">
@@ -117,7 +114,6 @@ const Projects = () => {
               console.error('Thumbnail failed to load:', displayUrl);
               // Fallback về ảnh gốc nếu thumbnail lỗi
               if (imageData && imageData.url && imageData.thumbnailUrl && displayUrl === imageData.thumbnailUrl) {
-                console.log('Thumbnail failed, falling back to original...');
                 e.target.src = getImageUrl(imageData, false);
               } else {
                 e.target.src = 'https://via.placeholder.com/40x40?text=Error';
@@ -183,7 +179,6 @@ const Projects = () => {
     }
 
     try {
-      console.log(`Bulk deleting projects:`, selectedItems);
       
       // Hoặc xóa từng cái một
       const deletePromises = selectedItems.map(id => projectService.deleteProject(id));

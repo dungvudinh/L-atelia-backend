@@ -4,7 +4,6 @@ import axiosClient from "../configs/axios";
 export const projectUploadService = {
   uploadProjectImage: async (projectId, file, imageType = 'gallery') => {
     try {
-      console.log(`📤 Uploading ${imageType} image for project ${projectId}:`, file.name);
       
       const formData = new FormData();
       formData.append('image', file);
@@ -20,7 +19,6 @@ export const projectUploadService = {
         },
       });
       
-      console.log('✅ Image uploaded successfully:', response.data);
       return response.data;
     } catch (error) {
       console.error('❌ Image upload error:', error);
@@ -30,7 +28,6 @@ export const projectUploadService = {
 
   uploadProjectImages: async (projectId, files, imageType = 'gallery') => {
     try {
-      console.log(`📤 Uploading ${files.length} ${imageType} images for project ${projectId}`);
       
       const formData = new FormData();
       files.forEach(file => {
@@ -49,7 +46,6 @@ export const projectUploadService = {
         },
       });
       
-      console.log(`✅ ${files.length} images uploaded successfully`);
       return response.data;
     } catch (error) {
       console.error('❌ Multiple images upload error:', error);
@@ -59,7 +55,6 @@ export const projectUploadService = {
 
   deleteProjectImage: async (projectId, imageKey, imageType = null) => {
     try {
-      console.log(`🗑️ Deleting image from project ${projectId}:`, imageKey);
       
       const params = imageType ? { imageType } : {};
       
@@ -69,7 +64,6 @@ export const projectUploadService = {
       
       const response = await axiosClient.delete(endpoint, { params });
       
-      console.log('✅ Image deleted successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Image delete error:', error);

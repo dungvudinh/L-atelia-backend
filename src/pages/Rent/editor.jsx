@@ -378,7 +378,6 @@ const RentEditor = () => {
         featured: formData.featured
       };
       
-      console.log('Sending rental data (JSON):', rentalData);
       
       let result;
       if (isEditMode) {

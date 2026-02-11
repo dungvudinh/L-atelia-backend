@@ -22,18 +22,9 @@ export const projectService = {
   // Create project - CHỈ GỬI JSON
   createProject: async (projectData) => {
     try {
-      console.log('📤 Creating project with data:', {
-        title: projectData.title,
-        imageCounts: {
-          gallery: projectData.gallery?.length || 0,
-          construction: projectData.constructionProgress?.length || 0,
-          design: projectData.designImages?.length || 0,
-          brochure: projectData.brochure?.length || 0
-        }
-      });
+      
       
       const response = await axiosClient.post('/v1/projects', projectData);
-      console.log('✅ Project created successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Error in createProject service:', error);
@@ -55,19 +46,9 @@ export const projectService = {
   // Update project - CHỈ GỬI JSON
   updateProject: async (id, projectData) => {
     try {
-      console.log('📤 Updating project:', {
-        id,
-        title: projectData.title,
-        imageCounts: {
-          gallery: projectData.gallery?.length || 0,
-          construction: projectData.constructionProgress?.length || 0,
-          design: projectData.designImages?.length || 0,
-          brochure: projectData.brochure?.length || 0
-        }
-      });
+      
       
       const response = await axiosClient.put(`/v1/projects/${id}`, projectData);
-      console.log('✅ Project updated successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Error in updateProject service:', error);
@@ -78,7 +59,6 @@ export const projectService = {
   deleteProject: async (id) => {
     try {
       const response = await axiosClient.delete(`/v1/projects/${id}`);
-      console.log('✅ Project deleted successfully');
       return response.data;
     } catch (error) {
       console.error('❌ Error in deleteProject service:', error);
