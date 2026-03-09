@@ -223,9 +223,9 @@ const Projects = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      published: { color: 'bg-green-100 text-green-800', label: 'Đã đăng' },
-      draft: { color: 'bg-yellow-100 text-yellow-800', label: 'Bản nháp' },
-      archived: { color: 'bg-gray-100 text-gray-800', label: 'Đã lưu trữ' }
+      sale: { color: 'bg-green-100 text-green-800', label: 'For Sale' },
+      rent: { color: 'bg-yellow-100 text-yellow-800', label: 'For Rent' },
+      // archived: { color: 'bg-gray-100 text-gray-800', label: 'Đã lưu trữ' }
     };
     
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
