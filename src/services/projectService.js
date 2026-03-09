@@ -47,7 +47,6 @@ export const projectService = {
   updateProject: async (id, projectData) => {
     try {
       
-      
       const response = await axiosClient.put(`/v1/projects/${id}`, projectData);
       return response.data;
     } catch (error) {

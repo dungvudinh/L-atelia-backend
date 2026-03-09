@@ -58,6 +58,7 @@ export default function ProjectEditor() {
     description: '',
     status: 'draft',
     location: '',
+    price:'',
     heroImage: null,
     gallery: [],
     propertyFeatures: [],
@@ -180,6 +181,7 @@ export default function ProjectEditor() {
         description: p.description || '',
         status: p.status || 'draft',
         location: p.location || '',
+        price: p.price || '',
         heroImage: p.heroImage || null,
         gallery: p.gallery || [],
         propertyFeatures: propertyFeaturesWithIds,
@@ -689,6 +691,7 @@ export default function ProjectEditor() {
         description: project.description,
         status: project.status,
         location: project.location,
+        price: project.price,
         propertyFeatures: project.propertyFeatures.filter(f => f.text.trim()),
         specifications: project.specifications.filter(s => s.text.trim()),
         propertyHighlights: project.propertyHighlights,
@@ -793,7 +796,20 @@ export default function ProjectEditor() {
                     disabled={isProcessing}
                   />
                 </div>
-                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Giá bán
+                  </label>
+                  <input 
+                    type="text" 
+                    name="price" 
+                    value={project.price} 
+                    onChange={handleInputChange} 
+                    placeholder="Giá bán" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    disabled={isProcessing}
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Trạng thái
