@@ -56,7 +56,8 @@ export default function ProjectEditor() {
   const [project, setProject] = useState({
     title: '',
     description: '',
-    status: 'draft',
+    type: 'rent',
+    status: 'available',
     location: '',
     price:'',
     heroImage: null,
@@ -179,7 +180,8 @@ export default function ProjectEditor() {
       setProject({
         title: p.title || '',
         description: p.description || '',
-        status: p.status || 'draft',
+        type: p.type || 'rent',
+        status: p.status || 'available',
         location: p.location || '',
         price: p.price || '',
         heroImage: p.heroImage || null,
@@ -689,6 +691,7 @@ export default function ProjectEditor() {
       const projectData = {
         title: project.title,
         description: project.description,
+        type: project.type,
         status: project.status,
         location: project.location,
         price: project.price,
@@ -702,7 +705,7 @@ export default function ProjectEditor() {
         designImages: project.designImages,
         brochure: project.brochure
       };
-      
+      console.log('Submitting project data:', projectData);
       
       let result;
       if (isEditMode) {
@@ -812,6 +815,21 @@ export default function ProjectEditor() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phân loại
+                  </label>
+                  <select 
+                    name="type" 
+                    value={project.type} 
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isProcessing}
+                  >
+                    <option value="sale">For Sale</option>
+                    <option value="rent">For Rent</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Trạng thái
                   </label>
                   <select 
@@ -821,8 +839,8 @@ export default function ProjectEditor() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     disabled={isProcessing}
                   >
-                    <option value="sale">For Sale</option>
-                    <option value="rent">For Rent</option>
+                    <option value="available">Available</option>
+                    <option value="sold">Sold</option>
                     {/* <option value="archived">Đã lưu trữ</option> */}
                   </select>
                 </div>

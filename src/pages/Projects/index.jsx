@@ -223,8 +223,8 @@ const Projects = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      sale: { color: 'bg-green-100 text-green-800', label: 'For Sale' },
-      rent: { color: 'bg-yellow-100 text-yellow-800', label: 'For Rent' },
+      available: { color: 'bg-green-100 text-green-800', label: 'Available' },
+      sold: { color: 'bg-red-100 text-red-800', label: 'Sold' },
       // archived: { color: 'bg-gray-100 text-gray-800', label: 'Đã lưu trữ' }
     };
     
