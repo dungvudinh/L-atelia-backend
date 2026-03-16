@@ -68,7 +68,8 @@ export default function ProjectEditor() {
     designImages: [],
     brochure: [],
     propertyHighlights: [],
-    specialSections: getDefaultSpecialSections()
+    specialSections: getDefaultSpecialSections(), 
+    youtubeLinks:[]
   });
 
   // Preview states
@@ -192,7 +193,8 @@ export default function ProjectEditor() {
         designImages: p.designImages || [],
         brochure: p.brochure || [],
         propertyHighlights:propertyHighlightsWithIds,
-        specialSections: specialSectionsWithIds
+        specialSections: specialSectionsWithIds, 
+         youtubeLinks: p.youtubeLinks || []
       });
 
       // Set previews
@@ -222,7 +224,34 @@ export default function ProjectEditor() {
       setIsProcessing(false);
     }
   };
+  const addYouTubeLink = () => {
+  const newLink = {
+    id: `youtube-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    url: ''
+  };
+  setProject(prev => ({
+    ...prev,
+    youtubeLinks: [...(prev.youtubeLinks || []), newLink]
+  }));
+  setIsDirty(true);
+};
 
+const updateYouTubeLink = (id, url) => {
+  setProject(prev => ({
+    ...prev,
+    youtubeLinks: prev.youtubeLinks.map(link =>
+      link.id === id ? { ...link, url } : link
+    )
+  }));
+  setIsDirty(true);
+};
+const removeYouTubeLink = (id) => {
+  setProject(prev => ({
+    ...prev,
+    youtubeLinks: prev.youtubeLinks.filter(link => link.id !== id)
+  }));
+  setIsDirty(true);
+};
   // Handle text input với dirty flag
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -703,7 +732,8 @@ export default function ProjectEditor() {
         gallery: project.gallery,
         constructionProgress: project.constructionProgress,
         designImages: project.designImages,
-        brochure: project.brochure
+        brochure: project.brochure,
+        youtubeLinks: project.youtubeLinks.filter(link => link.url.trim()) // Thêm dòng này
       };
       console.log('Submitting project data:', projectData);
       
@@ -1269,6 +1299,72 @@ export default function ProjectEditor() {
             </div>
           </div>
 
+          {/* YouTube Links */}
+<div className="bg-white p-6 rounded-lg shadow-sm">
+  <h2 className="text-xl font-semibold mb-4">Video YouTube</h2>
+  
+  {/* Danh sách YouTube links */}
+  <div className="space-y-3 mb-4">
+    {project.youtubeLinks && project.youtubeLinks.map((link, index) => (
+      <div key={link.id} className="flex items-center gap-3 group p-3 border border-gray-200 rounded-lg bg-gray-50">
+        <div className="flex-1">
+          <input
+            type="url"
+            value={link.url}
+            onChange={(e) => updateYouTubeLink(link.id, e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            disabled={isProcessing}
+          />
+          {link.url && (
+            <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
+              <span>Preview:</span>
+              <a 
+                href={link.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                {link.url}
+              </a>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => removeYouTubeLink(link.id)}
+          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-2"
+          title="Xóa link YouTube"
+          disabled={isProcessing}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    ))}
+    
+    {(!project.youtubeLinks || project.youtubeLinks.length === 0) && (
+      <div className="text-center py-6 text-gray-500 border-2 border-dashed rounded-lg">
+        <p className="text-sm">Chưa có YouTube links nào</p>
+        <p className="text-xs mt-1">Thêm link YouTube để hiển thị video trên trang dự án</p>
+      </div>
+    )}
+  </div>
+  
+  {/* Nút thêm YouTube link */}
+  <button
+    type="button"
+    onClick={addYouTubeLink}
+    className={`flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 transition-colors ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+    disabled={isProcessing}
+  >
+    <Plus className="w-4 h-4" />
+    Thêm YouTube Link
+  </button>
+  
+  <p className="text-xs text-gray-500 mt-2">
+    * Hỗ trợ YouTube link dạng: youtube.com/watch?v=... hoặc youtu.be/...
+  </p>
+</div>
           {/* Brochure */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Brochure (PDF hoặc ảnh)</h2>
