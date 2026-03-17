@@ -97,7 +97,8 @@ const MediaEditor = () => {
       const editor = editorRef.current;
       
       selectedImages.forEach(image => {
-        const imageUrl = 'https://cdn.latelia.com/latelia/' + image.key;
+        // const imageUrl = 'https://cdn.latelia.com/latelia/' + image.key;
+        const imageUrl = image.url; // Sử dụng URL trực tiếp từ image data
         editor.execCommand('mceInsertContent', false, `
           <img 
             src="${imageUrl}" 
