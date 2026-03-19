@@ -102,8 +102,8 @@ const Projects = () => {
    
     
     // Ưu tiên thumbnail cho danh sách
-    // const displayUrl = 'https://cdn.latelia.com/latelia/' + project.heroImage.thumbnailKey;
-    const displayUrl = project.heroImage.thumbnailUrl;
+    const displayUrl = 'https://cdn.latelia.com/latelia/' + project.heroImage.thumbnailKey;
+    // const displayUrl = project.heroImage.thumbnailUrl;
     if (displayUrl) {
       return (
         <div className="relative w-full h-full">
