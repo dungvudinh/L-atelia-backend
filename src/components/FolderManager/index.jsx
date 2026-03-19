@@ -226,16 +226,16 @@ const FolderManager = ({
   const getImageUrl = useCallback((image, preferThumbnail = true) => {
     if (!image) return null;
     
-    let imageKey = image.url;
+    let imageKey = image.key;
     
     // Ưu tiên thumbnail nếu có và user muốn dùng
     if (preferThumbnail && useThumbnails && image.thumbnailKey) {
-      imageKey = image.thumbnailUrl;
+      imageKey = image.thumbnailKey;
     }
     
     if (!imageKey) return null;
     
-    let finalUrl = imageKey;
+    let finalUrl = BASE_CDN_URL + imageKey;
     return finalUrl;
   }, [useThumbnails]);
 
