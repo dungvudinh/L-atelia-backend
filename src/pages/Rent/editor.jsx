@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import rentService from '../../services/rentService';
 import FolderManager from '../../components/FolderManager';
@@ -18,10 +18,18 @@ const RentEditor = () => {
     gallery: false
   });
 
-  // State cho rental data - CẬP NHẬT: featuredImage là object
+  // State cho amenities
+  const [allAmenities, setAllAmenities] = useState([]);
+  const [loadingAmenities, setLoadingAmenities] = useState(false);
+  const [showAmenityForm, setShowAmenityForm] = useState(false);
+  const [editingAmenity, setEditingAmenity] = useState(null);
+  const [newAmenity, setNewAmenity] = useState({ name: '', icon: '' });
+  
+  // State cho rental data
   const [formData, setFormData] = useState({
     title: '',
     location: '',
+    googleAddress: '',
     price: '',
     priceUnit: 'per night',
     adultBeds: '',
@@ -54,13 +62,8 @@ const RentEditor = () => {
       }
     ],
     amenities: [],
-    contactInfo: {
-      phone: '',
-      email: '',
-      address: ''
-    },
     gallery: [],
-    featuredImage: null, // ✅ CHUYỂN THÀNH OBJECT thay vì string
+    featuredImage: null,
     status: 'available',
     featured: false
   });
@@ -71,19 +74,7 @@ const RentEditor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
 
-  const amenitiesOptions = [
-    'Balcony',
-    'Air conditioning', 
-    'Parking',
-    'Fitness center',
-    'Kitchen',
-    'Family rooms',
-    'Non-smoking rooms',
-    'Wifi in all areas',
-    'Beachfront',
-  ];
-
-  // Icon mapping
+  // Icon mapping cho highlights
   const iconComponents = {
     calendar: (
       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,10 +98,29 @@ const RentEditor = () => {
     )
   };
 
+  // Load amenities list khi component mount
+  useEffect(() => {
+    loadAllAmenities();
+  }, []);
+
   // Load rental data khi edit
   useEffect(() => {
     if (rentId) loadRental(rentId);
   }, [rentId]);
+
+  // Load tất cả amenities từ database
+  const loadAllAmenities = async () => {
+    try {
+      setLoadingAmenities(true);
+      const response = await rentService.getAllAmenities({ limit: 100 });
+      console.log(response)
+      setAllAmenities(response || []);
+    } catch (error) {
+      console.error('Error loading amenities:', error);
+    } finally {
+      setLoadingAmenities(false);
+    }
+  };
 
   const loadRental = async (id) => {
     try {
@@ -125,16 +135,14 @@ const RentEditor = () => {
         return;
       }
 
-      // ✅ Xử lý featuredImage: có thể là string hoặc object
+      // Xử lý featuredImage
       let featuredImageData = null;
       if (rental.featuredImage) {
         if (typeof rental.featuredImage === 'string') {
-          // Nếu là string (URL cũ), tìm trong gallery
           const foundInGallery = rental.gallery?.find(img => img.url === rental.featuredImage);
           if (foundInGallery) {
             featuredImageData = foundInGallery;
           } else {
-            // Tạo object từ URL string
             featuredImageData = {
               id: `featured-${Date.now()}`,
               url: rental.featuredImage,
@@ -150,7 +158,6 @@ const RentEditor = () => {
             };
           }
         } else if (typeof rental.featuredImage === 'object') {
-          // Nếu đã là object
           featuredImageData = {
             ...rental.featuredImage,
             isFeatured: true
@@ -158,10 +165,13 @@ const RentEditor = () => {
         }
       }
 
-      // Set rental data
+      // Xử lý amenities: lấy array các ObjectId
+      const selectedAmenityIds = rental.amenities?.map(a => a._id || a) || [];
+
       setFormData({
         title: rental.title || '',
         location: rental.location || '',
+        googleAddress: rental.googleAddress || '',
         price: rental.price || '',
         priceUnit: rental.priceUnit || 'per night',
         adultBeds: rental.adultBeds || '',
@@ -171,13 +181,12 @@ const RentEditor = () => {
         description: rental.description || '',
         descriptionShort: rental.descriptionShort || '',
         highlights: rental.highlights || [],
-        amenities: rental.amenities || [],
-        contactInfo: rental.contactInfo || { phone: '', email: '', address: '' },
+        amenities: selectedAmenityIds,
         gallery: rental.gallery?.map(img => ({
           ...img,
           isFeatured: img.url === rental.featuredImage?.url || img.url === rental.featuredImage
         })) || [],
-        featuredImage: featuredImageData, // ✅ Lưu object thay vì string
+        featuredImage: featuredImageData,
         status: rental.status || 'available',
         featured: rental.featured || false
       });
@@ -202,7 +211,7 @@ const RentEditor = () => {
     setFolderManagerOpen(prev => ({ ...prev, [type]: false }));
   };
 
-  // ✅ Hàm tạo image object đầy đủ từ image data
+  // Hàm tạo image object đầy đủ từ image data
   const createImageObject = (imageData, isFeatured = false) => {
     return {
       id: imageData._id || `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -224,18 +233,15 @@ const RentEditor = () => {
     if (!selectedImages || selectedImages.length === 0) return;
 
     if (type === 'featuredImage') {
-      // Chỉ chọn 1 ảnh cho featured
       const imageData = Array.isArray(selectedImages) ? selectedImages[0] : selectedImages;
       const featuredImageObject = createImageObject(imageData, true);
       
       setFormData(prev => ({ 
         ...prev, 
         featuredImage: featuredImageObject,
-        // Update gallery để bỏ isFeatured khỏi các ảnh khác
         gallery: prev.gallery.map(img => ({ ...img, isFeatured: false }))
       }));
     } else if (type === 'gallery') {
-      // Thêm vào gallery
       const imagesToAdd = Array.isArray(selectedImages) ? selectedImages : [selectedImages];
       const newGalleryImages = imagesToAdd.map(img => createImageObject(img, false));
       
@@ -282,13 +288,11 @@ const RentEditor = () => {
     try {
       const selectedImage = formData.gallery[index];
       if (selectedImage) {
-        // Tạo featured image object từ gallery image
         const featuredImageObject = {
           ...selectedImage,
           isFeatured: true
         };
         
-        // Update gallery để bỏ isFeatured khỏi các ảnh khác
         const updatedGallery = formData.gallery.map((img, i) => ({
           ...img,
           isFeatured: i === index
@@ -305,21 +309,18 @@ const RentEditor = () => {
     }
   };
 
-  // ✅ Hàm getImageUrl để hiển thị ảnh
+  // Hàm getImageUrl để hiển thị ảnh
   const getImageUrl = (imageData) => {
     if (!imageData) return null;
     
-    // Nếu imageData là object có thumbnail, ưu tiên thumbnail
     if (typeof imageData === 'object' && imageData.thumbnailKey) {
       return 'https://cdn.latelia.com/latelia/' + imageData.thumbnailKey;
     }
     
-    // Fallback về url gốc
     if (typeof imageData === 'object' && imageData.key) {
       return 'https://cdn.latelia.com/latelia/' + imageData.key;
     }
     
-    // Nếu imageData là string (URL cũ)
     if (typeof imageData === 'string') {
       return imageData;
     }
@@ -327,113 +328,92 @@ const RentEditor = () => {
     return null;
   };
 
-  // Hàm submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isProcessing) {
-      alert('Đang xử lý, vui lòng chờ...');
+  // AMENITY HANDLERS
+  const getDefaultIcon = () => {
+    return `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>`;
+  };
+
+  const handleCreateAmenity = async () => {
+    if (!newAmenity.name.trim()) {
+      alert('Vui lòng nhập tên amenity');
       return;
     }
 
-    setLoading(true);
-    setIsProcessing(true);
-    
     try {
-      // Validation
-      if (!formData.title.trim() || !formData.location.trim() || !formData.price || 
-          !formData.description.trim() || !formData.descriptionShort.trim()) {
-        alert('Vui lòng nhập đầy đủ thông tin bắt buộc');
-        setLoading(false);
-        setIsProcessing(false);
-        return;
-      }
+      const response = await rentService.createAmenity({
+        name: newAmenity.name.trim(),
+        icon: newAmenity.icon || getDefaultIcon()
+      });
+
+      setAllAmenities(prev => [response.data, ...prev]);
+      setNewAmenity({ name: '', icon: '' });
+      setShowAmenityForm(false);
+      setEditingAmenity(null);
       
-      // Kiểm tra featuredImage (không bắt buộc nhưng nên có)
-      if (!formData.featuredImage && formData.gallery.length === 0) {
-        const confirmNoImage = window.confirm('⚠️ Bạn chưa chọn ảnh nào. Bạn có chắc muốn tiếp tục?');
-        if (!confirmNoImage) {
-          setLoading(false);
-          setIsProcessing(false);
-          return;
-        }
-      }
-      
-      // ✅ Chuẩn bị rental data với featuredImage là object
-      const rentalData = {
-        title: formData.title,
-        location: formData.location,
-        price: parseFloat(formData.price),
-        priceUnit: formData.priceUnit,
-        adultBeds: formData.adultBeds ? parseInt(formData.adultBeds) : 0,
-        childBeds: formData.childBeds ? parseInt(formData.childBeds) : 0,
-        bedrooms: formData.bedrooms ? parseInt(formData.bedrooms) : 0,
-        bathrooms: formData.bathrooms ? parseInt(formData.bathrooms) : 0,
-        description: formData.description,
-        descriptionShort: formData.descriptionShort,
-        highlights: formData.highlights.filter(h => h.title.trim() && h.description.trim()),
-        amenities: formData.amenities,
-        gallery: formData.gallery,
-        featuredImage: formData.featuredImage, // ✅ Gửi object thay vì string
-        status: formData.status,
-        featured: formData.featured
-      };
-      
-      
-      let result;
-      if (isEditMode) {
-        // Update rental với JSON thuần
-        result = await rentService.updateRental(rentId, rentalData);
-      } else {
-        // Create new rental với JSON thuần
-        result = await rentService.createRental(rentalData);
-      }
-      
-      alert(isEditMode ? 'Cập nhật rental thành công' : 'Tạo rental thành công');
-      navigate('/rent');
-      
-    } catch (err) {
-      console.error('Submit error:', err);
-      alert('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message));
-    } finally {
-      setLoading(false);
-      setIsProcessing(false);
+      alert('Thêm amenity thành công');
+    } catch (error) {
+      alert(error.message || 'Không thể tạo amenity');
     }
   };
 
-  // Các hàm xử lý khác giữ nguyên...
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleUpdateAmenity = async () => {
+    if (!newAmenity.name.trim() || !editingAmenity) return;
+
+    try {
+      const response = await rentService.updateAmenity(editingAmenity._id, {
+        name: newAmenity.name.trim(),
+        icon: newAmenity.icon
+      });
+
+      setAllAmenities(prev => prev.map(a => 
+        a._id === editingAmenity._id ? response.data : a
+      ));
+
+      setNewAmenity({ name: '', icon: '' });
+      setShowAmenityForm(false);
+      setEditingAmenity(null);
+      
+      alert('Cập nhật amenity thành công');
+    } catch (error) {
+      alert(error.message || 'Không thể cập nhật amenity');
+    }
+  };
+
+  const handleDeleteAmenity = async (amenity) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa amenity "${amenity.name}"?`)) {
+      return;
+    }
+
+    try {
+      await rentService.deleteAmenity(amenity._id);
+      
+      setAllAmenities(prev => prev.filter(a => a._id !== amenity._id));
+      
+      if (formData.amenities.includes(amenity._id)) {
+        setFormData(prev => ({
+          ...prev,
+          amenities: prev.amenities.filter(id => id !== amenity._id)
+        }));
+      }
+      
+      alert('Xóa amenity thành công');
+    } catch (error) {
+      alert(error.message || 'Không thể xóa amenity');
+    }
+  };
+
+  const toggleAmenity = (amenityId) => {
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      amenities: prev.amenities.includes(amenityId)
+        ? prev.amenities.filter(id => id !== amenityId)
+        : [...prev.amenities, amenityId]
     }));
   };
 
-  // const handleContactChange = (e) => {
-  //   const { name, value } = e.target;
-  //   setFormData(prev => ({
-  //     ...prev,
-  //     contactInfo: {
-  //       ...prev.contactInfo,
-  //       [name]: value
-  //     }
-  //   }));
-  // };
-
-  const handleDescriptionChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      description: e.target.value
-    }));
-  };
-
-  const handleShortDescriptionChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      descriptionShort: e.target.value
-    }));
-  };
-
+  // HIGHLIGHT HANDLERS
   const startEditingHighlight = (highlight) => {
     setEditingHighlight(highlight);
     setNewHighlight({ title: highlight.title, description: highlight.description });
@@ -483,12 +463,26 @@ const RentEditor = () => {
     }));
   };
 
-  const toggleAmenity = (amenity) => {
+  // FORM HANDLERS
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      amenities: prev.amenities.includes(amenity)
-        ? prev.amenities.filter(a => a !== amenity)
-        : [...prev.amenities, amenity]
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleDescriptionChange = (e) => {
+    setFormData(prev => ({
+      ...prev,
+      description: e.target.value
+    }));
+  };
+
+  const handleShortDescriptionChange = (e) => {
+    setFormData(prev => ({
+      ...prev,
+      descriptionShort: e.target.value
     }));
   };
 
@@ -529,6 +523,74 @@ const RentEditor = () => {
     );
   };
 
+  // SUBMIT HANDLER
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isProcessing) {
+      alert('Đang xử lý, vui lòng chờ...');
+      return;
+    }
+
+    setLoading(true);
+    setIsProcessing(true);
+    
+    try {
+      if (!formData.title.trim() || !formData.location.trim() || !formData.price || 
+          !formData.description.trim() || !formData.descriptionShort.trim()) {
+        alert('Vui lòng nhập đầy đủ thông tin bắt buộc');
+        setLoading(false);
+        setIsProcessing(false);
+        return;
+      }
+      
+      if (!formData.featuredImage && formData.gallery.length === 0) {
+        const confirmNoImage = window.confirm('⚠️ Bạn chưa chọn ảnh nào. Bạn có chắc muốn tiếp tục?');
+        if (!confirmNoImage) {
+          setLoading(false);
+          setIsProcessing(false);
+          return;
+        }
+      }
+      
+      const rentalData = {
+        title: formData.title,
+        location: formData.location,
+        googleAddress: formData.googleAddress,
+        price: formData.price,
+        priceUnit: formData.priceUnit,
+        adultBeds: formData.adultBeds ? parseInt(formData.adultBeds) : 0,
+        childBeds: formData.childBeds ? parseInt(formData.childBeds) : 0,
+        bedrooms: formData.bedrooms ? parseInt(formData.bedrooms) : 0,
+        bathrooms: formData.bathrooms ? parseInt(formData.bathrooms) : 0,
+        description: formData.description,
+        descriptionShort: formData.descriptionShort,
+        highlights: formData.highlights.filter(h => h.title.trim() && h.description.trim()),
+        amenities: formData.amenities,
+        gallery: formData.gallery,
+        featuredImage: formData.featuredImage,
+        status: formData.status,
+        featured: formData.featured
+      };
+      
+      let result;
+      if (isEditMode) {
+        result = await rentService.updateRental(rentId, rentalData);
+      } else {
+        result = await rentService.createRental(rentalData);
+      }
+      
+      alert(isEditMode ? 'Cập nhật rental thành công' : 'Tạo rental thành công');
+      navigate('/rent');
+      
+    } catch (err) {
+      console.error('Submit error:', err);
+      alert('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+      setIsProcessing(false);
+    }
+  };
+
   if (loading && isEditMode) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -539,7 +601,7 @@ const RentEditor = () => {
       </div>
     );
   }
-
+  console.log('All amenities:', allAmenities);
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4">
@@ -584,13 +646,29 @@ const RentEditor = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Địa chỉ trên Google Map *
+                </label>
+                <input 
+                  type="text" 
+                  name="googleAddress" 
+                  value={formData.googleAddress} 
+                  onChange={handleInputChange} 
+                  placeholder="Địa chỉ trên Google Map" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                  required 
+                  disabled={isProcessing}
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Giá *
                   </label>
                   <input 
-                    type="number" 
+                    type="text" 
                     name="price" 
                     value={formData.price} 
                     onChange={handleInputChange} 
@@ -716,7 +794,6 @@ const RentEditor = () => {
                       Using Thumbnail
                     </div>
                   )}
-                  {/* ✅ Hiển thị thông tin featured image */}
                   <div className="absolute bottom-3 left-3 bg-black bg-opacity-70 text-white text-xs p-2 rounded">
                     <p>Filename: {formData.featuredImage.filename}</p>
                     <p>Size: {(formData.featuredImage.size / 1024).toFixed(1)} KB</p>
@@ -798,10 +875,10 @@ const RentEditor = () => {
             </div>
           </div>
 
+          {/* Mô tả */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-6">Mô tả</h2>
             
-            {/* Short Description */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Mô tả ngắn *
@@ -820,7 +897,6 @@ const RentEditor = () => {
               />
             </div>
 
-            {/* Full Description */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Mô tả đầy đủ *
@@ -839,7 +915,6 @@ const RentEditor = () => {
               />
             </div>
 
-            {/* Preview Section */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Preview</h3>
               <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
@@ -945,7 +1020,6 @@ const RentEditor = () => {
               ))}
             </div>
 
-            {/* Add New Highlight */}
             <div className="pt-6 border-t border-gray-200">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Highlight</h3>
               <div className="space-y-3">
@@ -979,22 +1053,171 @@ const RentEditor = () => {
 
           {/* Amenities */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Amenities</h2>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {amenitiesOptions.map(amenity => (
-                <label key={amenity} className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.amenities.includes(amenity)}
-                    onChange={() => toggleAmenity(amenity)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    disabled={isProcessing}
-                  />
-                  <span className="text-sm text-gray-700">{amenity}</span>
-                </label>
-              ))}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Amenities</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingAmenity(null);
+                  setNewAmenity({ name: '', icon: '' });
+                  setShowAmenityForm(!showAmenityForm);
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={isProcessing}
+              >
+                <Plus className="w-4 h-4" />
+                Thêm Amenity mới
+              </button>
             </div>
+
+            {/* Form thêm/sửa amenity */}
+            {showAmenityForm && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="text-md font-medium text-gray-900 mb-3">
+                  {editingAmenity ? 'Chỉnh sửa Amenity' : 'Thêm Amenity mới'}
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tên Amenity *
+                    </label>
+                    <input
+                      type="text"
+                      value={newAmenity.name}
+                      onChange={(e) => setNewAmenity(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="VD: Wi-Fi tốc độ cao, Bể bơi vô cực, ..."
+                      disabled={isProcessing}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Icon (SVG)
+                    </label>
+                    <textarea
+                      value={newAmenity.icon}
+                      onChange={(e) => setNewAmenity(prev => ({ ...prev, icon: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                      rows="3"
+                      placeholder='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>'
+                      disabled={isProcessing}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Nhập SVG code cho icon. Để trống để dùng icon mặc định.
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={editingAmenity ? handleUpdateAmenity : handleCreateAmenity}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      disabled={isProcessing || !newAmenity.name.trim()}
+                    >
+                      {editingAmenity ? 'Cập nhật' : 'Thêm'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAmenityForm(false);
+                        setEditingAmenity(null);
+                        setNewAmenity({ name: '', icon: '' });
+                      }}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      disabled={isProcessing}
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Preview icon */}
+                {newAmenity.icon && (
+                  <div className="mt-3 p-2 bg-white rounded border">
+                    <p className="text-xs text-gray-500 mb-1">Preview icon:</p>
+                    <div 
+                      className="w-8 h-8"
+                      dangerouslySetInnerHTML={{ __html: newAmenity.icon }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Danh sách amenities */}
+            {loadingAmenities ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Đang tải amenities...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {allAmenities.map(amenity => (
+                  <div
+                    key={amenity._id}
+                    className="flex items-center justify-between p-2 hover:bg-gray-50 rounded group"
+                  >
+                    <label className="flex items-center space-x-3 flex-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.amenities.includes(amenity._id)}
+                        onChange={() => toggleAmenity(amenity._id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled={isProcessing}
+                      />
+                      <div 
+                        className="w-5 h-5"
+                        dangerouslySetInnerHTML={{ __html: amenity.icon || getDefaultIcon() }}
+                      />
+                      <span className="text-sm text-gray-700">{amenity.name}</span>
+                    </label>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAmenity(amenity);
+                          setNewAmenity({
+                            name: amenity.name,
+                            icon: amenity.icon || ''
+                          });
+                          setShowAmenityForm(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 p-1"
+                        title="Chỉnh sửa"
+                        disabled={isProcessing}
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAmenity(amenity)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                        title="Xóa"
+                        disabled={isProcessing}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {allAmenities.length === 0 && !loadingAmenities && (
+              <div className="text-center py-8 text-gray-500">
+                <p>Chưa có amenity nào. Hãy thêm amenity mới.</p>
+              </div>
+            )}
+
+            {/* Hiển thị số lượng đã chọn */}
+            {formData.amenities.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm text-green-600">
+                  ✓ Đã chọn {formData.amenities.length} amenity
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Status & Featured */}

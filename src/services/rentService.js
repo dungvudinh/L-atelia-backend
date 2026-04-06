@@ -103,6 +103,52 @@ const rentService = {
     } catch (error) {
       throw error.response?.data || error;
     }
+  },
+  // Trong rentService.js
+getAllAmenities: async (params = {}) => {
+  try {
+    const response = await axiosClient.get('/v1/rent/amenities', { params });
+    // ✅ Trả về thẳng mảng amenities
+    return response.data.data; 
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+  getAmenityById: async (id) => {
+    try {
+      const response = await axiosClient.get(`/v1/rent/amenities/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  createAmenity: async (amenityData) => {
+    try {
+      const response = await axiosClient.post('/v1/rent/amenities', amenityData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  updateAmenity: async (id, amenityData) => {
+    try {
+      const response = await axiosClient.put(`/v1/rent/amenities/${id}`, amenityData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  deleteAmenity: async (id) => {
+    try {
+      const response = await axiosClient.delete(`/v1/rent/amenities/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
   }
 };
 
